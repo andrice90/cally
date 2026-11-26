@@ -106,7 +106,7 @@ function detailSheet(card) {
 
 function kindBadge(card) {
   return card.kind === "feature"
-    ? h("div", { class: "kind" }, "Feature", h("code", { text: card.repo || "" }))
+    ? h("div", { class: "kind" }, h("span", { text: "Feature" }), h("code", { text: card.repo || "" }))
     : h("div", { class: "kind" }, "New project");
 }
 
@@ -174,17 +174,23 @@ function renderDeck() {
 
 function cardEl(card) {
   const note = deck.notes.get(card.id);
+  const effortName = { S: "Small", M: "Medium", L: "Large" }[card.effort] || card.effort;
   return h("article", { class: "card", tabindex: "0", "aria-label": card.title, "data-id": card.id },
-    h("div", { class: "stamp save", text: "SAVE" }),
-    h("div", { class: "stamp pass", text: "PASS" }),
-    h("div", { class: "stamp note", text: "NOTE" }),
-    kindBadge(card),
-    h("h2", { text: card.title }),
-    h("p", { class: "pitch", text: card.pitch }),
+    h("div", { class: "stamp save", text: "Save" }),
+    h("div", { class: "stamp pass", text: "Pass" }),
+    h("div", { class: "stamp note", text: "Note" }),
+    h("div", { class: "card-top" },
+      kindBadge(card),
+      h("span", { class: "effort", title: `Effort: ${effortName}`, "aria-label": `Effort: ${effortName}`, text: card.effort }),
+    ),
+    h("div", { class: "card-face" },
+      h("h2", { text: card.title }),
+      h("div", { class: "divider", "aria-hidden": "true" }),
+      h("p", { class: "pitch", text: card.pitch }),
+    ),
     h("ul", { class: "why" }, (card.why || []).map((w) => h("li", { text: w }))),
     h("div", { class: "foot" },
-      h("span", { class: "effort" }, "Effort", h("b", { text: card.effort })),
-      note ? h("span", { class: "note-mark", text: "✎ note attached" }) : h("span", { text: "Tap for details" }),
+      note ? h("span", { class: "note-mark", text: "✎ Note attached" }) : h("span", { text: "Tap for details" }),
     ),
   );
 }
