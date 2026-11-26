@@ -1,6 +1,6 @@
 # Cally — Product & Technical Spec
 
-> Status: approved for build (v1). Lives in this repo (`andrice90/cally`, formerly `andrice90/cally` and `andrice90/fly-agent`).
+> Status: approved for build (v1). Lives in this repo (`andrice90/cally`, formerly `andrice90/fly-agent`).
 
 ## 1. What Cally is
 
