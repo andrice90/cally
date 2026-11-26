@@ -1,3 +1,5 @@
+<p align="center"><img src="cally/static/icon.svg" width="128" alt="Cally"></p>
+
 # Cally
 
 A personal agent that reads your GitHub repos and, every morning, deals you a deck of up to 10 researched

@@ -1,6 +1,6 @@
 // App shell cache only; the API always goes to the network (no offline writes in v1).
-const CACHE = "cally-shell-v10";
-const SHELL = ["/static/app.css", "/static/app.js", "/static/icon.svg", "/static/icon-192.png", "/manifest.webmanifest"];
+const CACHE = "cally-shell-v11";
+const SHELL = ["/static/app.css", "/static/app.js", "/static/icon.svg", "/static/wordmark.svg", "/static/icon-192.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
