@@ -132,7 +132,7 @@ def _safe_url(u: str | None) -> str | None:
 # Email styling mirrors the app's index cards: warm paper, rounded card, serif ink, ember accent.
 PAPER, CARD, INK, INK2, FAINT, LINE = "#f4eee6", "#fffdf9", "#2a211b", "#5b4d43", "#9a8a7d", "#e4d9cb"
 EMBER, EMBER_SOFT, BAD = "#d9481a", "#fde7da", "#b8322a"
-SERIF = "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif"
+SERIF = "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Charter,Georgia,'Noto Serif','DejaVu Serif',serif"
 SHADOW = "0 1px 1px rgba(70,45,25,.05),0 4px 8px rgba(70,45,25,.06),0 16px 32px rgba(70,45,25,.10)"
 WORDMARK_CID = "cally-wordmark"
 
