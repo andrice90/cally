@@ -58,18 +58,15 @@ const view = () => document.getElementById("view");
 let pollTimer = null;
 function poll(fn, ms) { clearTimeout(pollTimer); pollTimer = setTimeout(fn, ms); }
 
-// ---------- toast ----------
-let toastTimer = null;
-function toast(msg, actions = [], ms = 6000) {
-  document.querySelectorAll(".toast").forEach((t) => t.remove());
-  clearTimeout(toastTimer);
-  const el = h("div", { class: "toast", role: "status" }, h("span", { text: msg }));
-  actions.forEach((a) => {
-    el.append(h("span", { class: "sep", text: "·" }));
-    el.append(h("button", { type: "button", onclick: () => { el.remove(); a.run(); } }, a.label));
-  });
-  document.body.append(el);
-  toastTimer = setTimeout(() => el.remove(), ms);
+// ---------- errors ----------
+// Failures show as one line of text at the top of the page; successes are silent.
+let errorTimer = null;
+function showError(msg) {
+  document.querySelectorAll(".page-error").forEach((e) => e.remove());
+  clearTimeout(errorTimer);
+  const el = h("p", { class: "page-error", role: "alert", text: msg });
+  view().prepend(el);
+  errorTimer = setTimeout(() => el.remove(), 6000);
 }
 
 // ---------- sheets ----------
@@ -124,14 +121,7 @@ async function loadDeck() {
     deck.frontId = null;
   }
   renderDeck();
-  updateStatus(deck.data.running, deck.data.last_run);
   if (deck.data.running || (!deck.cards.length)) poll(() => route() === "deck" && loadDeck(), deck.data.running ? 5000 : 60000);
-}
-
-function updateStatus(running, last) {
-  const el = document.getElementById("status");
-  if (running) { el.textContent = "Dealing"; el.className = "status-pill live"; }
-  else el.className = "status-pill hidden";
 }
 
 function renderDeck() {
@@ -255,17 +245,9 @@ async function commit(direction, extra = {}) {
     deck.notes.delete(card.id);
     deck.cards.shift();
     renderDeck();
-    if (direction === "left") {
-      toast("Dismissed", [
-        { label: "Undo", run: undo },
-        { label: "Never like this", run: () => neverLike(card) },
-      ]);
-    } else {
-      toast("Saved", [{ label: "Undo", run: undo }]);
-      refreshSavedCount();
-    }
+    if (direction === "right") refreshSavedCount();
   } catch (e) {
-    toast(e.message);
+    showError(e.message);
     await loadDeck();
   } finally {
     deck.busy = false;
@@ -275,8 +257,8 @@ async function commit(direction, extra = {}) {
 async function neverLike(card) {
   try {
     await api(`/api/cards/${card.id}/never`, { method: "POST" });
-    toast("Rule added");
-  } catch (e) { toast(e.message); }
+    loadHistory();
+  } catch (e) { showError(e.message); }
 }
 
 async function undo() {
@@ -289,7 +271,7 @@ async function undo() {
     await loadDeck();
     refreshSavedCount();
   } catch (e) {
-    toast(e.message);
+    showError(e.message);
   } finally {
     deck.busy = false;
   }
@@ -323,9 +305,8 @@ function noteSheet(card) {
 async function runNow() {
   try {
     await api("/api/runs", { method: "POST" });
-    toast("Run started");
     loadDeck();
-  } catch (e) { toast(e.message); }
+  } catch (e) { showError(e.message); }
 }
 
 // ---------- saved ----------
@@ -346,7 +327,7 @@ async function loadSaved() {
       h("div", { class: "meta" },
         h("span", { class: `chip ${c.spec_status || ""}`, text: labels[c.spec_status] || "—" }),
         c.pr_url ? safeLink(c.pr_url, "View PR") : null,
-        c.spec_status === "failed" ? h("button", { class: "btn", type: "button", onclick: async () => { try { await api(`/api/specs/${c.spec_id}/retry`, { method: "POST" }); loadSaved(); } catch (e) { toast(e.message); } } }, "Retry") : null,
+        c.spec_status === "failed" ? h("button", { class: "btn", type: "button", onclick: async () => { try { await api(`/api/specs/${c.spec_id}/retry`, { method: "POST" }); loadSaved(); } catch (e) { showError(e.message); } } }, "Retry") : null,
         h("span", { text: fmtDate(c.decided_at) }),
         h("button", { class: "btn ghost", type: "button", onclick: () => detailSheet(c) }, "Details"),
       ),
@@ -384,8 +365,9 @@ async function loadHistory() {
         c.pr_url ? safeLink(c.pr_url, "View PR") : null,
         h("button", { class: "btn ghost", type: "button", onclick: () => detailSheet(c) }, "Details"),
         c.status === "dismissed" ? h("button", { class: "btn", type: "button", onclick: async () => {
-          try { await api(`/api/cards/${c.id}/resave`, { method: "POST", body: {} }); toast("Saved"); refreshSavedCount(); loadHistory(); } catch (e) { toast(e.message); }
+          try { await api(`/api/cards/${c.id}/resave`, { method: "POST", body: {} }); refreshSavedCount(); loadHistory(); } catch (e) { showError(e.message); }
         } }, "Save instead") : null,
+        c.status === "dismissed" && !c.never ? h("button", { class: "btn ghost", type: "button", onclick: () => neverLike(c) }, "Never like this") : null,
       ),
     ));
   }
@@ -446,7 +428,7 @@ async function loadSettings() {
     const cb = h("input", { type: "checkbox", "aria-label": `Include ${r.full_name}` });
     cb.checked = !r.excluded;
     cb.addEventListener("change", async () => {
-      try { await api(`/api/repos/${r.id}`, { method: "PUT", body: { excluded: !cb.checked } }); } catch (e) { cb.checked = !cb.checked; toast(e.message); }
+      try { await api(`/api/repos/${r.id}`, { method: "PUT", body: { excluded: !cb.checked } }); } catch (e) { cb.checked = !cb.checked; showError(e.message); }
     });
     const tags = [r.private ? "private" : "public", r.fork ? "fork" : null, r.archived ? "archived" : null, r.pushed_at ? "pushed " + fmtDate(r.pushed_at) : null].filter(Boolean).join(" · ");
     repoBox.append(h("div", { class: "repo" },
@@ -455,8 +437,8 @@ async function loadSettings() {
   }
   const syncBtn = h("button", { class: "btn", type: "button", onclick: async () => {
     syncBtn.disabled = true; syncBtn.textContent = "Syncing…";
-    try { const r = await api("/api/repos/sync", { method: "POST" }); toast(`${r.count} repos synced`); loadSettings(); }
-    catch (e) { toast(e.message, [], 9000); syncBtn.disabled = false; syncBtn.textContent = "Sync"; }
+    try { const r = await api("/api/repos/sync", { method: "POST" }); loadSettings(); }
+    catch (e) { showError(e.message); syncBtn.disabled = false; syncBtn.textContent = "Sync"; }
   } }, "Sync");
   v.append(h("div", { class: "section" }, h("h3", {}, `Repos (${repos.repos.filter((r) => !r.excluded).length}/${repos.repos.length} included)`, syncBtn), repoBox));
 
@@ -467,7 +449,7 @@ async function loadSettings() {
     ruleBox.append(h("div", { class: "rule" },
       h("span", { class: "t", text: r.text }),
       h("button", { class: "iconbtn", type: "button", title: "Edit", "aria-label": "Edit rule", onclick: () => editRule(r) }, "Edit"),
-      h("button", { class: "iconbtn", type: "button", title: "Remove", "aria-label": "Remove rule", onclick: async () => { try { await api(`/api/never-rules/${r.id}`, { method: "DELETE" }); loadSettings(); } catch (e) { toast(e.message); } } }, "Remove")));
+      h("button", { class: "iconbtn", type: "button", title: "Remove", "aria-label": "Remove rule", onclick: async () => { try { await api(`/api/never-rules/${r.id}`, { method: "DELETE" }); loadSettings(); } catch (e) { showError(e.message); } } }, "Remove")));
   }
   v.append(h("div", { class: "section" }, h("h3", { text: "Never like this" }), ruleBox));
 
@@ -475,7 +457,7 @@ async function loadSettings() {
   v.append(h("div", { class: "section" },
     h("h3", {}, "What Cinder thinks you like", h("button", { class: "btn ghost danger", type: "button", onclick: async () => {
       if (!confirm("Reset the preference profile? Cinder will forget what it has learned from your swipes so far.")) return;
-      try { await api("/api/profile", { method: "DELETE" }); loadSettings(); } catch (e) { toast(e.message); }
+      try { await api("/api/profile", { method: "DELETE" }); loadSettings(); } catch (e) { showError(e.message); }
     } }, "Reset")),
     profile.markdown ? h("pre", { class: "profile", text: profile.markdown }) : h("p", { class: "muted small", text: "Nothing learned yet." }),
   ));
@@ -494,7 +476,7 @@ function editRule(rule) {
       h("div", { class: "actions" },
         h("button", { class: "btn ghost", type: "button", onclick: close }, "Cancel"),
         h("button", { class: "btn primary", type: "button", onclick: async () => {
-          try { await api(`/api/never-rules/${rule.id}`, { method: "PUT", body: { text: inp.value } }); close(); loadSettings(); } catch (e) { toast(e.message); }
+          try { await api(`/api/never-rules/${rule.id}`, { method: "PUT", body: { text: inp.value } }); close(); loadSettings(); } catch (e) { showError(e.message); }
         } }, "Save")));
   });
 }
