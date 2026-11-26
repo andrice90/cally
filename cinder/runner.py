@@ -149,7 +149,7 @@ class Cinder:
             step = (self.db.one("SELECT step FROM runs WHERE id=?", (run_id,)) or {}).get("step")
             self.db.run(
                 "UPDATE runs SET status='failed', finished_at=?, error=? WHERE id=?",
-                (now(), f"{step}: {str(exc)[:500]}", run_id),
+                (now(), f"{(step or 'run').capitalize()} failed. {str(exc)[:500]}", run_id),
             )
         finally:
             self._prune_run_dirs()

@@ -62,6 +62,9 @@ function fmtDate(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + fmtTime(iso);
 }
+function fmtDay(iso) {
+  return iso ? new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+}
 function readyLabel(hhmm) {
   const [hh, mm] = hhmm.split(":").map(Number);
   const d = new Date(); d.setHours(hh, mm, 0, 0);
@@ -118,7 +121,7 @@ function detailSheet(card) {
 
 function kindBadge(card) {
   return card.kind === "feature"
-    ? h("div", { class: "kind" }, h("span", { text: "Feature" }), h("code", { text: card.repo || "" }))
+    ? h("div", { class: "kind" }, h("code", { text: card.repo || "" }))
     : h("div", { class: "kind" }, "New project");
 }
 
@@ -149,7 +152,7 @@ function renderDeck(opts = {}) {
       running
         ? [h("h2", { text: "Dealing your deck" })]
         : [h("h2", { text: "All caught up" }), h("p", { text: `Next deck at ${readyLabel(deck.data ? deck.data.ready_by : "07:00")}` })],
-      last && last.status === "failed" && !running ? h("p", { class: "err", text: "Last run failed: " + (last.error || "unknown error") }) : null,
+      last && last.status === "failed" && !running ? h("p", { class: "err", text: last.error || "The last run failed." }) : null,
       running ? null : h("button", { class: "btn primary", type: "button", onclick: runNow }, "Run now"),
     ));
     return;
@@ -356,7 +359,7 @@ async function undo() {
 function noteSheet(card) {
   if (!card) return;
   sheet((close) => {
-    const ta = h("textarea", { id: "note", maxlength: "4000", placeholder: "Note", "aria-label": "Note" });
+    const ta = h("textarea", { id: "note", maxlength: "4000" });
     ta.value = deck.notes.get(card.id) || "";
     const attach = () => {
       const v = ta.value.trim();
@@ -365,11 +368,11 @@ function noteSheet(card) {
     };
     const go = (dir) => { const v = ta.value.trim(); if (v) deck.notes.set(card.id, v); close(); commit(dir); };
     return h("div", {},
-      h("h3", { text: "Add a note" }),
+      h("h3", {}, h("label", { class: "sheet-label", for: "note", text: "Add a note" })),
       h("p", { class: "sub", text: card.title }),
       ta,
-      h("div", { class: "actions" },
-        h("button", { class: "btn ghost", type: "button", onclick: close }, "Cancel"),
+      h("div", { class: "actions grid" },
+        h("button", { class: "btn", type: "button", onclick: close }, "Cancel"),
         h("button", { class: "btn", type: "button", onclick: attach }, "Attach note"),
         h("button", { class: "btn", type: "button", onclick: () => go("left") }, "Dismiss"),
         h("button", { class: "btn primary", type: "button", onclick: () => go("right") }, "Save"),
@@ -402,11 +405,13 @@ async function loadSaved() {
       c.note ? h("div", { class: "note", text: c.note }) : null,
       h("div", { class: "meta" },
         h("span", { class: `chip ${c.spec_status || ""}`, text: labels[c.spec_status] || "—" }),
+        h("span", { text: fmtDay(c.decided_at) }),
+        h("button", { class: "btn ghost details", type: "button", onclick: () => detailSheet(c) }, "Details"),
+      ),
+      c.pr_url || c.spec_status === "failed" ? h("div", { class: "item-actions" },
         c.pr_url ? safeLink(c.pr_url, "View PR") : null,
         c.spec_status === "failed" ? h("button", { class: "btn", type: "button", onclick: async () => { try { await api(`/api/specs/${c.spec_id}/retry`, { method: "POST" }); loadSaved(); } catch (e) { showError(e.message); } } }, "Retry") : null,
-        h("span", { text: fmtDate(c.decided_at) }),
-        h("button", { class: "btn ghost", type: "button", onclick: () => detailSheet(c) }, "Details"),
-      ),
+      ) : null,
       c.spec_status === "failed" && c.spec_error ? h("div", { class: "err", text: c.spec_error }) : null,
     ));
   }
@@ -415,7 +420,7 @@ async function loadSaved() {
 }
 
 function kindBadgeSmall(c) {
-  return h("div", { class: "kind small muted", text: c.kind === "feature" ? `Feature · ${c.repo}` : "New project" });
+  return h("div", { class: "item-kind", text: c.kind === "feature" ? c.repo : "New project" });
 }
 
 // ---------- history ----------
@@ -437,14 +442,16 @@ async function loadHistory() {
       c.note ? h("div", { class: "note", text: c.note }) : null,
       h("div", { class: "meta" },
         h("span", { class: `chip ${c.status}`, text: c.status === "liked" ? "Saved" : (c.never ? "Never like this" : "Dismissed") }),
-        h("span", { text: fmtDate(c.decided_at) }),
-        c.pr_url ? safeLink(c.pr_url, "View PR") : null,
-        h("button", { class: "btn ghost", type: "button", onclick: () => detailSheet(c) }, "Details"),
-        c.status === "dismissed" ? h("button", { class: "btn", type: "button", onclick: async () => {
-          try { await api(`/api/cards/${c.id}/resave`, { method: "POST", body: {} }); refreshSavedCount(); loadHistory(); } catch (e) { showError(e.message); }
-        } }, "Save instead") : null,
-        c.status === "dismissed" && !c.never ? h("button", { class: "btn ghost", type: "button", onclick: () => neverLike(c) }, "Never like this") : null,
+        h("span", { text: fmtDay(c.decided_at) }),
+        h("button", { class: "btn ghost details", type: "button", onclick: () => detailSheet(c) }, "Details"),
       ),
+      c.pr_url ? h("div", { class: "item-actions" }, safeLink(c.pr_url, "View PR")) : null,
+      c.status === "dismissed" ? h("div", { class: "item-actions grid" + (c.never ? " single" : "") },
+        h("button", { class: "btn", type: "button", onclick: async () => {
+          try { await api(`/api/cards/${c.id}/resave`, { method: "POST", body: {} }); refreshSavedCount(); loadHistory(); } catch (e) { showError(e.message); }
+        } }, "Save instead"),
+        !c.never ? h("button", { class: "btn", type: "button", onclick: () => neverLike(c) }, "Never like this") : null,
+      ) : null,
     ));
   }
   v.append(list);
@@ -481,9 +488,9 @@ async function loadSettings() {
 
   // Runs
   const runRows = runs.recent.length ? runs.recent.map((r) => h("div", { class: "run" },
-    h("span", { class: `chip ${r.status === "succeeded" ? "pr_open" : r.status === "failed" ? "failed" : "writing"}`, text: r.status }),
-    h("span", { text: `${fmtDate(r.started_at)} · ${r.kind}` }),
-    h("span", { class: "muted", text: `${r.new_cards} new · $${(r.cost_usd || 0).toFixed(2)}` }),
+    h("span", { class: `chip ${r.status === "succeeded" ? "pr_open" : r.status === "failed" ? "failed" : "writing"}`, text: { succeeded: "Succeeded", failed: "Failed", running: "Running" }[r.status] || r.status }),
+    h("span", { text: fmtDate(r.started_at) }),
+    h("span", { class: "muted", text: `$${(r.cost_usd || 0).toFixed(2)}` }),
     r.status === "running" ? h("span", { class: "muted", text: r.step || "" }) : null,
     r.error ? h("div", { class: "err w100", text: r.error }) : null,
   )) : [h("p", { class: "muted small", text: "No runs yet." })];
@@ -524,7 +531,7 @@ async function loadSettings() {
     cb.addEventListener("change", async () => {
       try { await api(`/api/repos/${r.id}`, { method: "PUT", body: { excluded: !cb.checked } }); } catch (e) { cb.checked = !cb.checked; showError(e.message); }
     });
-    const tags = [r.private ? "private" : "public", r.fork ? "fork" : null, r.archived ? "archived" : null, r.pushed_at ? "pushed " + fmtDate(r.pushed_at) : null].filter(Boolean).join(" · ");
+    const tags = r.archived ? "Archived" : r.fork ? "Fork" : r.pushed_at ? "Pushed " + new Date(r.pushed_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "";
     repoBox.append(h("div", { class: "repo" },
       h("div", { class: "name" }, h("b", { text: r.full_name }), h("span", { text: tags })),
       h("label", { class: "switch" }, cb, h("span", {}))));
@@ -582,8 +589,7 @@ function editRule(rule) {
     const inp = h("input", { type: "text", id: "rule", maxlength: "300" });
     inp.value = rule.text;
     return h("div", {},
-      h("h3", { text: "Edit rule" }),
-      h("label", { for: "rule", text: "Rule" }), inp,
+      h("h3", {}, h("label", { class: "sheet-label", for: "rule", text: "Edit rule" })), inp,
       h("div", { class: "actions" },
         h("button", { class: "btn ghost", type: "button", onclick: close }, "Cancel"),
         h("button", { class: "btn primary", type: "button", onclick: async () => {
