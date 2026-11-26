@@ -8,7 +8,7 @@ import httpx
 
 from .github import GATEWAY_LIST_URL
 
-log = logging.getLogger("cinder.notify")
+log = logging.getLogger("cally.notify")
 
 
 class NotifyError(RuntimeError):
@@ -38,7 +38,7 @@ class Notifier:
             return me["inbox_id"]
         inboxes = (await client.get(f"{base}/v0/inboxes")).json().get("inboxes", [])
         if not inboxes:
-            raise NotifyError("no AgentMail inbox available; set CINDER_AGENTMAIL_INBOX")
+            raise NotifyError("no AgentMail inbox available; set CALLY_AGENTMAIL_INBOX")
         return inboxes[0]["inbox_id"]
 
     async def send(self, subject: str, text: str, html: str | None = None, to: str | None = None) -> bool:

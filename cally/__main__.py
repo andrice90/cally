@@ -1,4 +1,4 @@
-"""python -m cinder [serve|seed-demo|info]"""
+"""python -m cally [serve|seed-demo|info]"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="cinder")
+    p = argparse.ArgumentParser(prog="cally")
     sub = p.add_subparsers(dest="cmd")
     s = sub.add_parser("serve", help="run the web app")
     s.add_argument("--host", default="0.0.0.0")

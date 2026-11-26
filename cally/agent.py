@@ -13,7 +13,7 @@ from string import Template
 
 import jsonschema
 
-log = logging.getLogger("cinder.agent")
+log = logging.getLogger("cally.agent")
 PROMPTS = Path(__file__).parent / "prompts"
 
 WEB_TOOLS = "WebSearch,WebFetch,Read,Glob,Grep"
@@ -91,7 +91,7 @@ def render(name: str, **values) -> str:
 def allowed_tools(tools: str) -> str:
     """Pre-approve tools, scoping file reads to the work dir.
 
-    A bare "Read" would approve reads of any path (e.g. ~/.cinder/env). "Read(./**)" approves only the
+    A bare "Read" would approve reads of any path (e.g. ~/.cally/env). "Read(./**)" approves only the
     work dir; anything else would need a permission prompt, which --permission-prompts none denies.
     Glob and Grep inside the work dir need no approval, so they aren't listed.
     """
@@ -104,8 +104,8 @@ def allowed_tools(tools: str) -> str:
 
 
 def _child_env() -> dict[str, str]:
-    """The agent never sees Cinder's secrets."""
-    drop = ("CINDER_", "GITHUB_", "AGENTMAIL")
+    """The agent never sees Cally's secrets."""
+    drop = ("CALLY_", "GITHUB_", "AGENTMAIL")
     return {k: v for k, v in os.environ.items() if not k.startswith(drop)}
 
 

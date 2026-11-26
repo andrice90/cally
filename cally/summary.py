@@ -77,7 +77,7 @@ def subject(d: dict) -> str:
     if d["opened"]:
         k = len(d["opened"])
         parts.append(f"{k} new spec{'s' if k != 1 else ''}")
-    return "Cinder: " + ", ".join(parts)
+    return "Cally: " + ", ".join(parts)
 
 
 def _activity_line(d: dict) -> str:

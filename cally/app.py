@@ -26,13 +26,13 @@ from .db import DB
 from .fixtures import reset_demo
 from .github import GitHub
 from .notify import Notifier
-from .runner import Cinder, UndoRefused
+from .runner import Cally, UndoRefused
 from .scheduler import next_ready
 
-log = logging.getLogger("cinder.app")
+log = logging.getLogger("cally.app")
 STATIC = Path(__file__).parent / "static"
-SESSION_COOKIE = "cinder_session"
-STATE_COOKIE = "cinder_oauth_state"
+SESSION_COOKIE = "cally_session"
+STATE_COOKIE = "cally_oauth_state"
 SESSION_AGE = 30 * 24 * 3600
 TICK_SECONDS = 300
 HEARTBEAT_SECONDS = 15
@@ -97,38 +97,38 @@ def create_app(
     if github_factory is None:
         async def github_factory():
             return await GitHub.create(cfg)
-    cinder = Cinder(cfg, db, github_factory, notifier or Notifier(cfg))
+    cally = Cally(cfg, db, github_factory, notifier or Notifier(cfg))
     # Demo mode: a separate database with generic content; no agent calls, GitHub or email.
-    demo = Cinder(cfg, DB(cfg.home / "demo.db"), github_factory, notifier or Notifier(cfg), demo=True)
+    demo = Cally(cfg, DB(cfg.home / "demo.db"), github_factory, notifier or Notifier(cfg), demo=True)
     if not demo.db.one("SELECT 1 FROM cards LIMIT 1"):
         reset_demo(demo.db)
 
-    def cur() -> Cinder:
-        return demo if db.settings().get("demo_mode") else cinder
-    signer = URLSafeTimedSerializer(cfg.session_secret, salt="cinder-session")
+    def cur() -> Cally:
+        return demo if db.settings().get("demo_mode") else cally
+    signer = URLSafeTimedSerializer(cfg.session_secret, salt="cally-session")
     secure_cookie = cfg.base_url.startswith("https://")
     wake_limit = RateLimit(6, 3600)
     login_limit = RateLimit(10, 600)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        cinder.recover()
-        cinder.spawn(cinder.spec_worker())
+        cally.recover()
+        cally.spawn(cally.spec_worker())
         if cfg.scheduler:
-            cinder.spawn(ticker())
+            cally.spawn(ticker())
         yield
-        await cinder.shutdown()
+        await cally.shutdown()
 
     async def ticker():
         while True:
             try:
-                await cinder.maybe_catch_up()
+                await cally.maybe_catch_up()
             except Exception:
                 log.exception("scheduler tick failed")
             await asyncio.sleep(TICK_SECONDS)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.cinder = cinder
+    app.state.cally = cally
     app.state.db = db
 
     # ---------- security plumbing ----------
@@ -390,7 +390,7 @@ def create_app(
 
     @app.post("/api/summary/test")
     async def summary_test(user: str = Depends(require_user)):
-        to = cinder.summary_recipient()
+        to = cally.summary_recipient()
         if not to:
             raise HTTPException(409, "Add an email address first.")
         try:
@@ -490,14 +490,14 @@ def create_app(
             raise HTTPException(401, "bad token")
         if not wake_limit.allow():
             raise HTTPException(429, "rate limited")
-        run_id = await cinder.maybe_catch_up(wake=True)
+        run_id = await cally.maybe_catch_up(wake=True)
 
         async def stream():
             if run_id is None:
                 yield json.dumps({"event": "idle", "detail": "today's run already done"}) + "\n"
                 return
             yield json.dumps({"event": "started", "run_id": run_id}) + "\n"
-            task = cinder.run_task
+            task = cally.run_task
             while task and not task.done():
                 done, _ = await asyncio.wait({task}, timeout=HEARTBEAT_SECONDS)
                 if not done:

@@ -1,0 +1,36 @@
+name: Cally wake
+
+# Sprites pause when idle and have no cron, so this wakes Cally each morning and holds the request
+# open while it streams heartbeats, keeping the Sprite awake for the whole run (spec §8).
+on:
+  schedule:
+    - cron: "0 10 * * *"   # 4 am CST / 5 am CDT
+    - cron: "30 11 * * *"  # retry; does nothing if today's run already succeeded
+  workflow_dispatch:
+
+concurrency:
+  group: cally-wake
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Wake Cally and wait for the run
+        env:
+          CALLY_WAKE_URL: ${{ secrets.CALLY_WAKE_URL }}
+          CALLY_WAKE_TOKEN: ${{ secrets.CALLY_WAKE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CALLY_WAKE_URL}" ] || [ -z "${CALLY_WAKE_TOKEN}" ]; then
+            echo "::error::Set the CALLY_WAKE_URL and CALLY_WAKE_TOKEN repository secrets"; exit 1
+          fi
+          curl --no-buffer --silent --show-error --fail-with-body --max-time 3540 \
+            -X POST "${CALLY_WAKE_URL%/}/hooks/wake" \
+            -H "Authorization: Bearer ${CALLY_WAKE_TOKEN}" | tee wake.log
+          last=$(tail -n 1 wake.log)
+          case "$last" in
+            *'"event": "idle"'*|*'"status": "succeeded"'*) echo "ok" ;;
+            *) echo "::error::Cally run did not succeed: $last"; exit 1 ;;
+          esac

@@ -27,7 +27,7 @@ def test_secrets_generated_and_private(env, make_client):
     envfile = c.app_cfg.home / "env"
     assert oct(envfile.stat().st_mode & 0o777) == "0o600"
     text = envfile.read_text()
-    for k in ("CINDER_SESSION_SECRET", "CINDER_WAKE_TOKEN", "CINDER_ACCESS_CODE"):
+    for k in ("CALLY_SESSION_SECRET", "CALLY_WAKE_TOKEN", "CALLY_ACCESS_CODE"):
         assert k in text
 
 
@@ -43,7 +43,7 @@ def test_oauth_only_owner(make_client, monkeypatch):
     import httpx
     monkeypatch.setenv("GITHUB_OAUTH_CLIENT_ID", "cid")
     monkeypatch.setenv("GITHUB_OAUTH_CLIENT_SECRET", "csecret")
-    monkeypatch.setenv("CINDER_OWNER_LOGIN", "TheOwner")
+    monkeypatch.setenv("CALLY_OWNER_LOGIN", "TheOwner")
     who = {"login": "someone-else"}
 
     def handler(req):
@@ -56,7 +56,7 @@ def test_oauth_only_owner(make_client, monkeypatch):
     assert c.post("/auth/code", json={"code": c.app_cfg.access_code}, headers=ORIGIN).status_code == 404
     r = c.get("/auth/login", follow_redirects=False)
     assert r.headers["location"].startswith("https://github.com/login/oauth/authorize")
-    state = r.cookies.get("cinder_oauth_state") or c.cookies.get("cinder_oauth_state")
+    state = r.cookies.get("cally_oauth_state") or c.cookies.get("cally_oauth_state")
     # Bad state
     r = c.get("/auth/callback?code=x&state=nope", follow_redirects=False)
     assert "error=state" in r.headers["location"]
@@ -65,7 +65,7 @@ def test_oauth_only_owner(make_client, monkeypatch):
     assert "error=denied" in r.headers["location"]
     # Owner (case-insensitive)
     c.get("/auth/login", follow_redirects=False)
-    state = c.cookies.get("cinder_oauth_state")
+    state = c.cookies.get("cally_oauth_state")
     who["login"] = "theowner"
     r = c.get(f"/auth/callback?code=x&state={state}", follow_redirects=False)
     assert r.headers["location"] == "/"
@@ -162,7 +162,7 @@ def test_swipe_right_opens_feature_spec_pr(client, gh):
     assert saved["spec_status"] == "pr_open", saved.get("spec_error")
     pr = gh.pulls[0]
     assert pr["repo"] == card["repo"]
-    assert pr["head"] == f"cinder/spec-{card['slug']}"
+    assert pr["head"] == f"cally/spec-{card['slug']}"
     assert pr["title"] == f"Spec: {card['title']}"
     assert saved["pr_url"] == pr["html_url"]
     doc = gh.files[(card["repo"], pr["head"])][f"docs/specs/{card['slug']}.md"]
@@ -178,8 +178,8 @@ def test_project_spec_goes_to_home_repo(client, gh):
     card = next(c for c in client.get("/api/deck").json()["cards"] if c["kind"] == "project")
     post(client, f"/api/cards/{card['id']}/swipe", {"direction": "right"})
     wait_for(lambda: gh.pulls)
-    assert gh.pulls[0]["repo"] == "owner/cinder"
-    assert f"docs/ideas/{card['slug']}.md" in gh.files[("owner/cinder", f"cinder/spec-{card['slug']}")]
+    assert gh.pulls[0]["repo"] == "owner/cally"
+    assert f"docs/ideas/{card['slug']}.md" in gh.files[("owner/cally", f"cally/spec-{card['slug']}")]
 
 
 def test_dismiss_never_and_undo(client, env):
@@ -220,7 +220,7 @@ def test_never_rule_crud_and_ideation_input(client, env):
 
 def test_undo_queued_like_cancels_spec(make_client, gh, monkeypatch):
     # With the real grace period, the spec worker waits, so an immediate undo succeeds.
-    monkeypatch.setenv("CINDER_SPEC_GRACE", "30")
+    monkeypatch.setenv("CALLY_SPEC_GRACE", "30")
     client = login(make_client())
     run_and_wait(client)
     card = client.get("/api/deck").json()["cards"][0]
@@ -369,13 +369,13 @@ def test_daily_summary_after_scheduled_run(client, mail, gh):
     wait_for(lambda: mail.sent)
     m = mail.sent[0]
     assert m["to"] == ["owner@example.com"]
-    assert m["subject"] == "Cinder: 10 ideas waiting"
+    assert m["subject"] == "Cally: 10 ideas waiting"
     assert "Waiting today (10, 10 new)" in m["text"]
     assert "New specs yesterday" in m["text"] and "Open your deck: http://testserver/" in m["text"]
     deck = client.get("/api/deck").json()["cards"]
     assert deck[0]["title"] in m["text"] and "<b>" in m["html"]
     # Once per day: a second scheduled run doesn't send another.
-    client.app.state.cinder.db.run("UPDATE runs SET status='failed'")
+    client.app.state.cally.db.run("UPDATE runs SET status='failed'")
     with client.stream("POST", "/hooks/wake", headers={"Authorization": f"Bearer {tok}"}) as r:
         list(r.iter_lines())
     import time; time.sleep(0.3)
@@ -384,9 +384,9 @@ def test_daily_summary_after_scheduled_run(client, mail, gh):
 
 def test_summary_counts_yesterday(client, mail):
     from datetime import UTC, datetime, timedelta
-    from cinder import summary
+    from cally import summary
     run_and_wait(client)
-    db = client.app.state.cinder.db
+    db = client.app.state.cally.db
     cards = client.get("/api/deck").json()["cards"]
     y = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     db.run("UPDATE cards SET status='liked', decided_at=?, note='nice' WHERE id=?", (y, cards[0]["id"]))
@@ -399,7 +399,7 @@ def test_summary_counts_yesterday(client, mail):
     assert d["saved"] == 1 and d["dismissed"] == 1 and d["never"] == 1 and d["notes"] == 1
     assert f"- {cards[0]['title']}: https://github.com/owner/alpha/pull/7" in text
     assert "Saved 1, dismissed 1 (1 marked never), 1 note." in text
-    assert summary.subject(d) == "Cinder: 8 ideas waiting, 1 new spec"
+    assert summary.subject(d) == "Cally: 8 ideas waiting, 1 new spec"
     # Untrusted card text is escaped in the HTML version.
     db.run("UPDATE cards SET title='<script>x</script>' WHERE id=?", (cards[2]["id"],))
     h = summary.render_html(summary.gather(db, "https://example.test"))
@@ -407,7 +407,7 @@ def test_summary_counts_yesterday(client, mail):
 
 
 def test_summary_settings_and_test_send(client, mail, monkeypatch):
-    monkeypatch.setattr(client.app.state.cinder.cfg, "notify_email", "")
+    monkeypatch.setattr(client.app.state.cally.cfg, "notify_email", "")
     assert post(client, "/api/summary/test").status_code == 409
     assert client.put("/api/settings", json={"notify_email": "not-an-email"}, headers=ORIGIN).status_code == 422
     s = client.put("/api/settings", json={"notify_email": "me@example.org"}, headers=ORIGIN).json()
@@ -415,4 +415,4 @@ def test_summary_settings_and_test_send(client, mail, monkeypatch):
     assert post(client, "/api/summary/test").status_code == 200
     assert mail.sent[-1]["to"] == ["me@example.org"]
     # A test send doesn't use up today's scheduled summary.
-    assert not client.app.state.cinder.db.settings()["summary_sent_date"]
+    assert not client.app.state.cally.db.settings()["summary_sent_date"]

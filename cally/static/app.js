@@ -1,5 +1,5 @@
 "use strict";
-// Cinder client. All card and spec text is untrusted: it is only ever set with textContent.
+// Cally client. All card and spec text is untrusted: it is only ever set with textContent.
 
 // ---------- helpers ----------
 function h(tag, attrs, ...kids) {
@@ -578,8 +578,8 @@ async function loadSettings() {
 
   // Profile
   v.append(h("div", { class: "section" },
-    h("h3", {}, "What Cinder thinks you like", h("button", { class: "btn ghost danger", type: "button", onclick: async () => {
-      if (!confirm("Reset the preference profile? Cinder will forget what it has learned from your swipes so far.")) return;
+    h("h3", {}, "What Cally thinks you like", h("button", { class: "btn ghost danger", type: "button", onclick: async () => {
+      if (!confirm("Reset the preference profile? Cally will forget what it has learned from your swipes so far.")) return;
       try { await api("/api/profile", { method: "DELETE" }); loadSettings(); } catch (e) { showError(e.message); }
     } }, "Reset")),
     profile.markdown ? profileEl(profile.markdown) : h("p", { class: "muted small", text: "Nothing learned yet." }),

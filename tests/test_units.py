@@ -4,10 +4,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from cinder import agent
-from cinder.db import DB, DEFAULT_SETTINGS, slugify
-from cinder.runner import compute_slots
-from cinder.scheduler import generation_time, run_due
+from cally import agent
+from cally.db import DB, DEFAULT_SETTINGS, slugify
+from cally.runner import compute_slots
+from cally.scheduler import generation_time, run_due
 from tests.conftest import FAKE_CLAUDE
 
 S = dict(DEFAULT_SETTINGS)
@@ -69,7 +69,7 @@ def test_run_due(tmp_path):
 async def test_agent_flags_and_output(tmp_path, monkeypatch):
     log = tmp_path / "log"
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(log))
-    monkeypatch.setenv("CINDER_SECRET_THING", "x")
+    monkeypatch.setenv("CALLY_SECRET_THING", "x")
     res = await agent.run_claude(str(FAKE_CLAUDE), "hello", agent.NEVER_RULE_SCHEMA, tools="",
                                  budget=0.2, timeout=20, cwd=tmp_path / "w")
     assert res.data["rule"] and res.cost == 0.01

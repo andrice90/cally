@@ -18,7 +18,7 @@ from .github import GitHub
 from .notify import Notifier
 from .scheduler import local_date, run_due
 
-log = logging.getLogger("cinder.runner")
+log = logging.getLogger("cally.runner")
 
 IDEATION_TIMEOUT = 30 * 60
 SPEC_TIMEOUT = 15 * 60
@@ -57,7 +57,7 @@ def compute_slots(settings: dict, pending: list[dict]) -> tuple[int, int]:
 GitHubFactory = Callable[[], Awaitable[GitHub]]
 
 
-class Cinder:
+class Cally:
     def __init__(self, cfg: Config, db: DB, github_factory: GitHubFactory, notifier: Notifier, demo: bool = False):
         self.cfg = cfg
         self.demo = demo  # demo store: no agent calls, GitHub or email; Run now re-deals the demo deck
@@ -74,7 +74,7 @@ class Cinder:
     def recover(self) -> None:
         """After a restart, nothing is running: close out interrupted work."""
         self.db.run(
-            "UPDATE runs SET status='failed', error='interrupted (Cinder restarted)', finished_at=? "
+            "UPDATE runs SET status='failed', error='interrupted (Cally restarted)', finished_at=? "
             "WHERE status='running'",
             (now(),),
         )
@@ -538,16 +538,16 @@ class Cinder:
                 cwd=work,
             )
             doc = res.data["markdown"].strip()
-            doc += "\n\n---\n\n## Appendix: original Cinder card\n\n" + card_text
+            doc += "\n\n---\n\n## Appendix: original Cally card\n\n" + card_text
             doc += "\n\n**Note from the owner:** " + (card["note"] or "_(none)_") + "\n"
             body = (
                 f"{payload.get('pitch', '')}\n\n"
                 + (f"**Owner's note:** {card['note']}\n\n" if card["note"] else "")
-                + f"Spec written by Cinder from a saved idea card. File: `{path}`."
+                + f"Spec written by Cally from a saved idea card. File: `{path}`."
             )
             try:
                 url = await gh.open_spec_pr(
-                    target_repo, f"cinder/spec-{card['slug']}", path, doc, f"Spec: {card['title']}", body
+                    target_repo, f"cally/spec-{card['slug']}", path, doc, f"Spec: {card['title']}", body
                 )
             except Exception as exc:
                 raise RuntimeError(f"opening the PR failed: {exc}") from exc

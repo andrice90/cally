@@ -7,7 +7,7 @@ import logging
 from .db import DB, now
 from .github import GitHub
 
-log = logging.getLogger("cinder.digest")
+log = logging.getLogger("cally.digest")
 
 MANIFESTS = (
     "package.json",

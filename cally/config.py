@@ -1,4 +1,4 @@
-"""Configuration: loads ~/.cinder/env and generates missing secrets."""
+"""Configuration: loads ~/.cally/env and generates missing secrets."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
-GENERATED = ("CINDER_SESSION_SECRET", "CINDER_WAKE_TOKEN", "CINDER_ACCESS_CODE")
+GENERATED = ("CALLY_SESSION_SECRET", "CALLY_WAKE_TOKEN", "CALLY_ACCESS_CODE")
 
 
-def cinder_home() -> Path:
-    return Path(os.environ.get("CINDER_HOME", Path.home() / ".cinder"))
+def cally_home() -> Path:
+    return Path(os.environ.get("CALLY_HOME", Path.home() / ".cally"))
 
 
 def _parse_env(text: str) -> dict[str, str]:
@@ -36,7 +36,7 @@ def load_env_file(home: Path) -> dict[str, str]:
     values = _parse_env(path.read_text()) if path.exists() else {}
     missing = [k for k in GENERATED if not values.get(k)]
     if missing:
-        lines = [f"{k}={secrets.token_urlsafe(32 if k != 'CINDER_ACCESS_CODE' else 12)}" for k in missing]
+        lines = [f"{k}={secrets.token_urlsafe(32 if k != 'CALLY_ACCESS_CODE' else 12)}" for k in missing]
         with path.open("a") as fh:
             if path.stat().st_size and not path.read_text().endswith("\n"):
                 fh.write("\n")
@@ -71,7 +71,7 @@ class Config:
 
     @property
     def db_path(self) -> Path:
-        return self.home / "cinder.db"
+        return self.home / "cally.db"
 
     @property
     def runs_dir(self) -> Path:
@@ -83,7 +83,7 @@ class Config:
 
 
 def load_config() -> Config:
-    home = cinder_home()
+    home = cally_home()
     file_values = load_env_file(home)
 
     def get(key: str, default: str = "") -> str:
@@ -91,23 +91,23 @@ def load_config() -> Config:
 
     return Config(
         home=home,
-        base_url=get("CINDER_BASE_URL", "http://localhost:8080").rstrip("/"),
-        github_mode=get("CINDER_GITHUB_MODE", "gateway"),
+        base_url=get("CALLY_BASE_URL", "http://localhost:8080").rstrip("/"),
+        github_mode=get("CALLY_GITHUB_MODE", "gateway"),
         github_token=get("GITHUB_TOKEN"),
-        github_api_url=get("CINDER_GITHUB_API_URL").rstrip("/"),
-        home_repo=get("CINDER_HOME_REPO", "andrice90/cinder"),
-        owner_login=get("CINDER_OWNER_LOGIN"),
+        github_api_url=get("CALLY_GITHUB_API_URL").rstrip("/"),
+        home_repo=get("CALLY_HOME_REPO", "andrice90/cinder"),
+        owner_login=get("CALLY_OWNER_LOGIN"),
         oauth_client_id=get("GITHUB_OAUTH_CLIENT_ID"),
         oauth_client_secret=get("GITHUB_OAUTH_CLIENT_SECRET"),
-        session_secret=get("CINDER_SESSION_SECRET"),
-        wake_token=get("CINDER_WAKE_TOKEN"),
-        access_code=get("CINDER_ACCESS_CODE"),
-        notify_email=get("CINDER_NOTIFY_EMAIL"),
-        agentmail_inbox=get("CINDER_AGENTMAIL_INBOX"),
-        agentmail_url=get("CINDER_AGENTMAIL_URL").rstrip("/"),
-        tz=get("CINDER_TZ", "America/Chicago"),
-        ready_by=get("CINDER_READY_BY", "07:00"),
-        claude_bin=get("CINDER_CLAUDE_BIN", "claude"),
-        scheduler=get("CINDER_SCHEDULER", "1") == "1",
-        spec_grace=int(get("CINDER_SPEC_GRACE", "30")),
+        session_secret=get("CALLY_SESSION_SECRET"),
+        wake_token=get("CALLY_WAKE_TOKEN"),
+        access_code=get("CALLY_ACCESS_CODE"),
+        notify_email=get("CALLY_NOTIFY_EMAIL"),
+        agentmail_inbox=get("CALLY_AGENTMAIL_INBOX"),
+        agentmail_url=get("CALLY_AGENTMAIL_URL").rstrip("/"),
+        tz=get("CALLY_TZ", "America/Chicago"),
+        ready_by=get("CALLY_READY_BY", "07:00"),
+        claude_bin=get("CALLY_CLAUDE_BIN", "claude"),
+        scheduler=get("CALLY_SCHEDULER", "1") == "1",
+        spec_grace=int(get("CALLY_SPEC_GRACE", "30")),
     )

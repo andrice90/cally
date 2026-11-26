@@ -8,16 +8,16 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from cinder.app import create_app
-from cinder.config import load_config
-from cinder.github import GitHub
-from cinder.notify import Notifier
+from cally.app import create_app
+from cally.config import load_config
+from cally.github import GitHub
+from cally.notify import Notifier
 
 FAKE_CLAUDE = Path(__file__).parent / "fake_claude.py"
 
 
 class FakeGitHub:
-    """In-memory GitHub REST API, enough for Cinder."""
+    """In-memory GitHub REST API, enough for Cally."""
 
     def __init__(self):
         self.repos = {}
@@ -118,20 +118,20 @@ class FakeMail:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv("CINDER_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("CINDER_BASE_URL", "http://testserver")
-    monkeypatch.setenv("CINDER_GITHUB_MODE", "token")
+    monkeypatch.setenv("CALLY_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CALLY_BASE_URL", "http://testserver")
+    monkeypatch.setenv("CALLY_GITHUB_MODE", "token")
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
-    monkeypatch.setenv("CINDER_GITHUB_API_URL", "http://gh.test")
-    monkeypatch.setenv("CINDER_CLAUDE_BIN", str(FAKE_CLAUDE))
-    monkeypatch.setenv("CINDER_SCHEDULER", "0")
-    monkeypatch.setenv("CINDER_SPEC_GRACE", "0")
-    monkeypatch.setenv("CINDER_NOTIFY_EMAIL", "owner@example.com")
-    monkeypatch.setenv("CINDER_AGENTMAIL_URL", "http://mail.test")
-    monkeypatch.setenv("CINDER_AGENTMAIL_INBOX", "bot@example.com")
-    monkeypatch.setenv("CINDER_HOME_REPO", "owner/cinder")
+    monkeypatch.setenv("CALLY_GITHUB_API_URL", "http://gh.test")
+    monkeypatch.setenv("CALLY_CLAUDE_BIN", str(FAKE_CLAUDE))
+    monkeypatch.setenv("CALLY_SCHEDULER", "0")
+    monkeypatch.setenv("CALLY_SPEC_GRACE", "0")
+    monkeypatch.setenv("CALLY_NOTIFY_EMAIL", "owner@example.com")
+    monkeypatch.setenv("CALLY_AGENTMAIL_URL", "http://mail.test")
+    monkeypatch.setenv("CALLY_AGENTMAIL_INBOX", "bot@example.com")
+    monkeypatch.setenv("CALLY_HOME_REPO", "owner/cally")
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(tmp_path / "claude.log"))
-    for k in ("GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET", "CINDER_OWNER_LOGIN", "FAKE_CLAUDE_MODE"):
+    for k in ("GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET", "CALLY_OWNER_LOGIN", "FAKE_CLAUDE_MODE"):
         monkeypatch.delenv(k, raising=False)
     return tmp_path
 
@@ -139,7 +139,7 @@ def env(tmp_path, monkeypatch):
 @pytest.fixture
 def gh():
     g = FakeGitHub()
-    g.add_repo(10, "owner/cinder")
+    g.add_repo(10, "owner/cally")
     return g
 
 

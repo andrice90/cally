@@ -7,7 +7,7 @@ import logging
 
 import httpx
 
-log = logging.getLogger("cinder.github")
+log = logging.getLogger("cally.github")
 
 GATEWAY_LIST_URL = "https://api.sprites.dev/v1/gateway/list"
 PUBLIC_API = "https://api.github.com"
@@ -37,7 +37,7 @@ async def discover_gateway_url(client: httpx.AsyncClient | None = None) -> str:
         if own:
             await client.aclose()
     raise GitHubNotConfigured(
-        "GitHub is not connected in the Sprite API gateway (or set CINDER_GITHUB_MODE=token)"
+        "GitHub is not connected in the Sprite API gateway (or set CALLY_GITHUB_MODE=token)"
     )
 
 
@@ -50,7 +50,7 @@ class GitHub:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "cinder",
+            "User-Agent": "cally",
         }
         if cfg.github_api_url:
             base = cfg.github_api_url
@@ -60,7 +60,7 @@ class GitHub:
             base = await discover_gateway_url()
         if cfg.github_mode == "token":
             if not cfg.github_token:
-                raise GitHubNotConfigured("CINDER_GITHUB_MODE=token but GITHUB_TOKEN is not set")
+                raise GitHubNotConfigured("CALLY_GITHUB_MODE=token but GITHUB_TOKEN is not set")
             headers["Authorization"] = f"Bearer {cfg.github_token}"
         client = httpx.AsyncClient(
             base_url=base, headers=headers, timeout=30, transport=transport, follow_redirects=True

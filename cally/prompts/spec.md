@@ -1,4 +1,4 @@
-You are Cinder's spec writer. The developer saved this idea and wants a full product spec for it.
+You are Cally's spec writer. The developer saved this idea and wants a full product spec for it.
 Today is $today.
 
 ## The idea
@@ -32,5 +32,5 @@ $technical_hint
 ## Success metrics
 ## Risks & open questions
 
-Do not include an appendix; Cinder adds the original card and note itself.
+Do not include an appendix; Cally adds the original card and note itself.
 Return the whole document as `markdown`.

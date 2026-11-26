@@ -20,7 +20,7 @@ log = os.environ.get("FAKE_CLAUDE_LOG")
 if log:
     with open(log, "a") as fh:
         fh.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "prompt": prompt,
-                             "env_has_secrets": any(k.startswith(("CINDER_", "GITHUB_")) for k in os.environ)}) + "\n")
+                             "env_has_secrets": any(k.startswith(("CALLY_", "GITHUB_")) for k in os.environ)}) + "\n")
 
 mode = os.environ.get("FAKE_CLAUDE_MODE", "ok")
 if mode == "sleep":
