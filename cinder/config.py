@@ -67,6 +67,7 @@ class Config:
     ready_by: str
     claude_bin: str
     scheduler: bool
+    spec_grace: int  # seconds a saved card waits before its spec starts, so undo still works
 
     @property
     def db_path(self) -> Path:
@@ -108,4 +109,5 @@ def load_config() -> Config:
         ready_by=get("CINDER_READY_BY", "07:00"),
         claude_bin=get("CINDER_CLAUDE_BIN", "claude"),
         scheduler=get("CINDER_SCHEDULER", "1") == "1",
+        spec_grace=int(get("CINDER_SPEC_GRACE", "30")),
     )

@@ -125,6 +125,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("CINDER_GITHUB_API_URL", "http://gh.test")
     monkeypatch.setenv("CINDER_CLAUDE_BIN", str(FAKE_CLAUDE))
     monkeypatch.setenv("CINDER_SCHEDULER", "0")
+    monkeypatch.setenv("CINDER_SPEC_GRACE", "0")
     monkeypatch.setenv("CINDER_NOTIFY_EMAIL", "owner@example.com")
     monkeypatch.setenv("CINDER_AGENTMAIL_URL", "http://mail.test")
     monkeypatch.setenv("CINDER_AGENTMAIL_INBOX", "bot@example.com")

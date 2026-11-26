@@ -75,15 +75,16 @@ nav.tabs a.on { color: var(--ember-2); }
   will-change: transform;
   overflow: hidden;
 }
-.card.next { transform: translateY(14px) scale(0.955); opacity: 0.7; pointer-events: none; }
-.card.third { transform: translateY(26px) scale(0.91); opacity: 0.35; pointer-events: none; }
+.card.next { transform: translateY(14px) scale(0.955); filter: brightness(0.8); pointer-events: none; }
+.card.third { transform: translateY(26px) scale(0.91); filter: brightness(0.6); pointer-events: none; }
+.card.third > * { visibility: hidden; }
 .card.dragging { transition: none; cursor: grabbing; }
 .card::before {
   content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
   background: linear-gradient(90deg, var(--flame), var(--ember), var(--ember-2));
 }
-.card .kind { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ember-2); }
-.card .kind code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; color: var(--muted); background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 6px; letter-spacing: 0; }
+.kind { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ember-2); }
+.kind code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; color: var(--muted); background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 6px; letter-spacing: 0; }
 .card h2 { margin: 0; font-size: 25px; line-height: 1.18; letter-spacing: -0.01em; }
 .card .pitch { margin: 0; color: var(--muted); font-size: 16px; }
 .card ul.why { margin: 2px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -156,7 +157,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px
 
 /* ---------- toast ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  position: fixed; left: 50%; top: calc(62px + env(safe-area-inset-top)); transform: translateX(-50%);
   background: #33261f; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
   padding: 10px 12px 10px 16px; display: flex; gap: 12px; align-items: center; z-index: 50; max-width: calc(100% - 24px);
   font-size: 14px; animation: up 0.18s ease-out;
@@ -234,3 +235,4 @@ pre.profile { white-space: pre-wrap; font: 14px/1.5 var(--font); color: var(--te
 .mt12 { margin-top: 12px; }
 .w100 { width: 100%; }
 .row-actions { display: flex; gap: 10px; align-items: center; }
+.toast > span:first-child { white-space: nowrap; }

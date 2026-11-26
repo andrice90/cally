@@ -384,7 +384,7 @@ class Cinder:
                 raise UndoRefused("Nothing to undo.")
             if row["status"] == "liked":
                 spec = c.execute("SELECT status FROM specs WHERE card_id=?", (row["id"],)).fetchone()
-                if spec and spec["status"] != "queued":
+                if spec and spec["status"] not in ("queued", "failed"):
                     raise UndoRefused(
                         "The spec for this idea is already being written, so it can't be undone. "
                         "You can close the PR instead."
@@ -427,10 +427,19 @@ class Cinder:
     # ---------- spec worker ----------
     async def spec_worker(self) -> None:
         while True:
-            job = self.db.one("SELECT * FROM specs WHERE status='queued' ORDER BY created_at, id LIMIT 1")
+            job = self.db.one("SELECT * FROM specs WHERE status='queued' ORDER BY updated_at, id LIMIT 1")
             if not job:
                 self.spec_wakeup.clear()
                 await self.spec_wakeup.wait()
+                continue
+            # Grace period: a just-saved card can still be undone before its spec starts.
+            age = (datetime.now(UTC) - datetime.fromisoformat(job["updated_at"])).total_seconds()
+            if age < self.cfg.spec_grace:
+                self.spec_wakeup.clear()
+                try:
+                    await asyncio.wait_for(self.spec_wakeup.wait(), self.cfg.spec_grace - age)
+                except asyncio.TimeoutError:
+                    pass
                 continue
             claimed = self.db.run(
                 "UPDATE specs SET status='writing', updated_at=? WHERE id=? AND status='queued'",

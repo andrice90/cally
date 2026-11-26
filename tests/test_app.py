@@ -219,16 +219,27 @@ def test_never_rule_crud_and_ideation_input(client, env):
     assert client.get("/api/never-rules").json()["rules"] == []
 
 
-def test_undo_queued_like_cancels_spec(client, make_client, gh):
+def test_undo_queued_like_cancels_spec(make_client, gh, monkeypatch):
+    # With the real grace period, the spec worker waits, so an immediate undo succeeds.
+    monkeypatch.setenv("CINDER_SPEC_GRACE", "30")
+    client = login(make_client())
     run_and_wait(client)
-    app = client.app
-    # Stop the worker from picking the job up so it stays queued.
-    app.state.cinder.spec_wakeup.set = lambda: None
     card = client.get("/api/deck").json()["cards"][0]
     post(client, f"/api/cards/{card['id']}/swipe", {"direction": "right"})
+    import time; time.sleep(0.3)
     assert client.get("/api/saved").json()["cards"][0]["spec_status"] == "queued"
     assert post(client, "/api/undo").status_code == 200
     assert client.get("/api/saved").json()["cards"] == []
+    assert gh.pulls == []
+
+
+def test_undo_after_failed_spec(client, gh):
+    run_and_wait(client)
+    card = next(c for c in client.get("/api/deck").json()["cards"] if c["kind"] == "feature")
+    gh.refs.pop((card["repo"], "main"))  # opening the PR will fail
+    post(client, f"/api/cards/{card['id']}/swipe", {"direction": "right"})
+    wait_for(lambda: client.get("/api/saved").json()["cards"][0]["spec_status"] == "failed")
+    assert post(client, "/api/undo").status_code == 200
 
 
 def test_history_and_resave(client, gh):
