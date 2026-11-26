@@ -18,6 +18,20 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 
+const ICONS = {
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  pass: '<path d="M18 6 6 18M6 6l12 12"/>',
+  note: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5v3M15 2.5v3M9 11h6M9 15h4"/>',
+  save: '<path class="fill" d="M12 20.5s-7.5-4.6-9.3-9.4C1.6 8 3.5 4.5 7 4.5c2.1 0 3.6 1.2 5 3 1.4-1.8 2.9-3 5-3 3.5 0 5.4 3.5 4.3 6.6-1.8 4.8-9.3 9.4-9.3 9.4z"/>',
+};
+function icon(name) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 24 24");
+  s.setAttribute("aria-hidden", "true");
+  s.innerHTML = ICONS[name]; // constant markup, never user data
+  return s;
+}
+
 function safeLink(url, text) {
   let ok = false;
   try { ok = ["https:", "http:"].includes(new URL(url).protocol); } catch (_) {}
@@ -89,6 +103,7 @@ function detailSheet(card) {
       kindBadge(card),
       h("h3", { class: "mt8", text: card.title }),
       h("p", { class: "sub", text: card.pitch }),
+      sec("Why", (card.why || []).map((w) => h("li", { text: w }))),
       sec("Summary", card.summary),
       sec("Why now", card.why_now),
       sec("SEO angle", card.seo),
@@ -110,7 +125,7 @@ function kindBadge(card) {
 // ---------- deck ----------
 const deck = { cards: [], notes: new Map(), busy: false, data: null, frontId: null };
 
-async function loadDeck() {
+async function loadDeck(opts = {}) {
   try {
     deck.data = await api("/api/deck");
   } catch (e) { return renderError(e); }
@@ -120,11 +135,11 @@ async function loadDeck() {
     if (i > 0) deck.cards.unshift(deck.cards.splice(i, 1)[0]);
     deck.frontId = null;
   }
-  renderDeck();
+  renderDeck(opts);
   if (deck.data.running || (!deck.cards.length)) poll(() => route() === "deck" && loadDeck(), deck.data.running ? 5000 : 60000);
 }
 
-function renderDeck() {
+function renderDeck(opts = {}) {
   const v = view();
   v.replaceChildren();
   if (!deck.cards.length) {
@@ -146,19 +161,73 @@ function renderDeck() {
     const el = cardEl(card);
     if (idx === 1) el.classList.add("next");
     if (idx === 2) el.classList.add("third");
-    if (idx === 0) attachDrag(el, card);
+    if (idx === 0) attachDrag(el, card); else el.setAttribute("aria-hidden", "true");
     stack.append(el);
   });
   v.append(h("div", { class: "deck-wrap" },
     stack,
     h("div", { class: "controls" },
-      h("button", { class: "round small", type: "button", title: "Undo (u)", "aria-label": "Undo", onclick: undo }, "↶"),
-      h("button", { class: "round pass", type: "button", title: "Dismiss (←)", "aria-label": "Dismiss", onclick: () => commit("left") }, "✕"),
-      h("button", { class: "round note", type: "button", title: "Add a note (↑)", "aria-label": "Add a note", onclick: () => noteSheet(deck.cards[0]) }, "✎"),
-      h("button", { class: "round save", type: "button", title: "Save (→)", "aria-label": "Save", onclick: () => commit("right") }, "♥"),
+      h("button", { class: "round undo", type: "button", title: "Undo (u)", "aria-label": "Undo", onclick: undo }, icon("undo")),
+      h("button", { class: "round pass", type: "button", title: "Dismiss (←)", "aria-label": "Dismiss", onclick: () => commit("left") }, icon("pass")),
+      h("button", { class: "round note", type: "button", title: "Add a note (↑)", "aria-label": "Add a note", onclick: () => noteSheet(deck.cards[0]) }, icon("note")),
+      h("button", { class: "round save", type: "button", title: "Save (→)", "aria-label": "Save", onclick: () => commit("right") }, icon("save")),
     ),
   ));
+  const els = [...stack.querySelectorAll(".card")].reverse(); // top first
+  els.forEach(fitCard);
+  if (opts.enter) enterFrom(els, opts.enter);
 }
+
+// Shrink type step by step until the card's content fits; drop the reasons as a last resort
+// (they're also in the details sheet).
+const FIT_STEPS = [
+  // [title px, pitch px, reason px, extra classes]
+  [34, 18, 14.5, ""],
+  [31, 17, 14, ""],
+  [28, 16, 13.5, "clamp-why"],
+  [26, 15.5, 13, "clamp-why clamp-pitch"],
+  [24, 15, 13, "clamp-why-1 clamp-pitch"],
+  [22, 14.5, 12.5, "clamp-why-1 clamp-pitch"],
+];
+const FIT_CLASSES = ["clamp-why", "clamp-why-1", "clamp-pitch", "no-why"];
+function fitCard(el) {
+  for (const [t, p, w, extra] of FIT_STEPS) {
+    el.classList.remove(...FIT_CLASSES);
+    if (extra) el.classList.add(...extra.split(" "));
+    el.style.setProperty("--title-size", t + "px");
+    el.style.setProperty("--pitch-size", p + "px");
+    el.style.setProperty("--why-size", w + "px");
+    if (el.scrollHeight <= el.clientHeight + 1) return;
+  }
+  el.classList.add("no-why");
+}
+
+function flingTransform(direction) {
+  const x = direction === "right" ? window.innerWidth : -window.innerWidth;
+  return `translate(${x}px, 40px) rotate(${direction === "right" ? 24 : -24}deg)`;
+}
+
+// Undo: the card flies back in from the side it left; the cards behind step back.
+function enterFrom([top, nxt, thd], direction) {
+  const all = [top, nxt, thd].filter(Boolean);
+  all.forEach((el) => el.classList.add("no-anim"));
+  top.style.transform = flingTransform(direction);
+  if (nxt) nxt.classList.remove("next");
+  if (thd) thd.classList.replace("third", "next");
+  void top.offsetWidth; // commit the start state
+  requestAnimationFrame(() => {
+    all.forEach((el) => el.classList.remove("no-anim"));
+    top.style.transform = "";
+    if (nxt) nxt.classList.add("next");
+    if (thd) thd.classList.replace("next", "third");
+  });
+}
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (route() === "deck" && !deck.busy && deck.cards.length) renderDeck(); }, 150);
+});
 
 function cardEl(card) {
   const note = deck.notes.get(card.id);
@@ -228,10 +297,14 @@ function attachDrag(el, card) {
 function flyOut(direction) {
   const el = document.querySelector(".stack .card:not(.next):not(.third)");
   if (!el) return Promise.resolve();
-  const x = direction === "right" ? window.innerWidth : -window.innerWidth;
-  el.style.transform = `translate(${x}px, 40px) rotate(${direction === "right" ? 24 : -24}deg)`;
+  el.style.transform = flingTransform(direction);
   el.style.opacity = "0";
-  return new Promise((r) => setTimeout(r, 220));
+  // The cards behind move up at the same time, so nothing pops in afterwards.
+  const nxt = document.querySelector(".stack .card.next");
+  const thd = document.querySelector(".stack .card.third");
+  if (nxt) nxt.classList.remove("next");
+  if (thd) thd.classList.replace("third", "next");
+  return new Promise((r) => setTimeout(r, 300));
 }
 
 async function commit(direction, extra = {}) {
@@ -267,8 +340,11 @@ async function undo() {
   try {
     const r = await api("/api/undo", { method: "POST" });
     deck.frontId = r.card_id;
-    if (route() !== "deck") location.hash = "#/";
-    await loadDeck();
+    if (route() !== "deck") {
+      location.hash = "#/";
+      return;  // the route change renders the deck
+    }
+    await loadDeck({ enter: r.was === "liked" ? "right" : "left" });
     refreshSavedCount();
   } catch (e) {
     showError(e.message);

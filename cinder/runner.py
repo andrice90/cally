@@ -395,7 +395,7 @@ class Cinder:
                 "UPDATE cards SET status='pending', decided_at=NULL, note=NULL, never=0 WHERE id=?",
                 (row["id"],),
             )
-        return {"card_id": row["id"]}
+        return {"card_id": row["id"], "was": row["status"]}
 
     def resave(self, card_id: int, note: str | None) -> None:
         """Save a card that was dismissed earlier (from History)."""

@@ -196,7 +196,7 @@ def test_dismiss_never_and_undo(client, env):
     assert rules[0]["id"] == rid and rules[0]["text"] == "No more ideas about things like that"
     # Undo restores the card, removes the rule, and puts it back in the deck.
     r = post(client, "/api/undo")
-    assert r.json()["card_id"] == a["id"]
+    assert r.json() == {"card_id": a["id"], "was": "dismissed"}
     assert client.get("/api/never-rules").json()["rules"] == []
     assert any(c["id"] == a["id"] for c in client.get("/api/deck").json()["cards"])
     # Undo with nothing decided.

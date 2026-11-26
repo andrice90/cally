@@ -95,7 +95,16 @@ nav.tabs a.on { color: var(--ember); font-weight: 700; }
 /* Cards waiting underneath peek out like a stack of index cards. */
 .card.next { transform: translateY(16px) scale(0.95); background: #fbf6ef; pointer-events: none; }
 .card.third { transform: translateY(30px) scale(0.9); background: #f6efe5; pointer-events: none; }
-.card.next > *, .card.third > * { visibility: hidden; }
+.card > :not(.stamp) { transition: opacity 0.3s; }
+.card.next > :not(.stamp), .card.third > :not(.stamp) { opacity: 0; }
+.card.no-why .why { display: none; }
+.card.clamp-why .why li, .card.clamp-why-1 .why li, .card.clamp-pitch .pitch {
+  display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card.clamp-why .why li { -webkit-line-clamp: 2; }
+.card.clamp-why-1 .why li { -webkit-line-clamp: 1; }
+.card.clamp-pitch .pitch { -webkit-line-clamp: 3; }
+.card.no-anim, .card.no-anim > * { transition: none !important; }
 .card.dragging { transition: none; cursor: grabbing; box-shadow: var(--shadow-lift); }
 
 .card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -116,20 +125,20 @@ nav.tabs a.on { color: var(--ember); font-weight: 700; }
   box-shadow: inset 0 0 0 1.5px var(--line);
 }
 .card-face {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 10px 4px; min-height: 0;
+  flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 10px 4px;
 }
 .card h2 {
-  margin: 0; font-size: clamp(27px, 7.6vw, 34px); line-height: 1.12; font-weight: 700; letter-spacing: -0.01em;
+  margin: 0; font-size: var(--title-size, 34px); line-height: 1.12; font-weight: 700; letter-spacing: -0.01em;
   text-wrap: balance;
 }
 .divider { width: 44px; height: 2px; border-radius: 2px; background: var(--line); margin: 18px auto 16px; }
-.card .pitch { margin: 0; color: var(--ink-2); font-size: 18px; font-style: italic; line-height: 1.45; text-wrap: pretty; }
+.card .pitch { margin: 0; color: var(--ink-2); font-size: var(--pitch-size, 18px); font-style: italic; line-height: 1.45; text-wrap: pretty; }
 .card ul.why {
   margin: 0; padding: 14px 0 0; list-style: none; display: flex; flex-direction: column; gap: 9px;
   border-top: 1px dashed var(--line);
 }
-.card ul.why li { font-size: 14.5px; line-height: 1.35; color: var(--ink-2); }
+.card ul.why li { font-size: var(--why-size, 14.5px); line-height: 1.35; color: var(--ink-2); }
 .card .foot { margin-top: 12px; text-align: center; color: var(--faint); font-size: 13px; font-style: italic; }
 .note-mark { color: var(--save); font-style: normal; font-weight: 700; }
 
@@ -142,7 +151,7 @@ nav.tabs a.on { color: var(--ember); font-weight: 700; }
 .stamp.pass { left: 22px; background: var(--pass); transform: rotate(-8deg); }
 .stamp.note { left: 50%; top: auto; bottom: 70px; transform: translateX(-50%); background: var(--ink); }
 
-.controls { display: flex; gap: 18px; align-items: center; justify-content: center; margin-top: 34px; }
+.controls { position: relative; z-index: 5; display: flex; gap: 18px; align-items: center; justify-content: center; margin-top: 34px; }
 .round {
   width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--card);
   display: grid; place-items: center; font-size: 24px; box-shadow: var(--shadow-card);
@@ -150,12 +159,13 @@ nav.tabs a.on { color: var(--ember); font-weight: 700; }
 }
 .round:hover { box-shadow: var(--shadow-lift); }
 .round:active { transform: scale(0.92); }
-.round.small { width: 46px; height: 46px; font-size: 19px; color: var(--faint); }
+.round svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.round svg .fill { fill: currentColor; stroke: none; }
+.round.undo { color: var(--faint); }
 .round.pass { color: var(--pass); }
 .round.note { color: var(--ink-2); }
 .round.save {
   color: #fff; background: linear-gradient(140deg, var(--ember-2), var(--save));
-  width: 70px; height: 70px; font-size: 29px;
   box-shadow: 0 6px 14px rgba(217, 72, 26, 0.28), 0 18px 36px rgba(217, 72, 26, 0.22);
 }
 .round:disabled { opacity: 0.4; }
