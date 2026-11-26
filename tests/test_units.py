@@ -81,6 +81,8 @@ async def test_agent_flags_and_output(tmp_path, monkeypatch):
     assert argv[argv.index("--setting-sources") + 1] == "project"
     assert argv[argv.index("--max-budget-usd") + 1] == "0.20"
     assert "--bare" not in argv
+    assert argv[argv.index("--allowedTools") + 1] == ""
+
     assert json.loads((tmp_path / "w" / ".empty-mcp.json").read_text()) == {"mcpServers": {}}
     assert call["cwd"] == str(tmp_path / "w")
     assert call["prompt"] == "hello"
@@ -109,3 +111,10 @@ async def test_agent_schema_validation(tmp_path):
     schema = {"type": "object", "required": ["rule", "other"], "properties": {"rule": {"type": "string"}}}
     with pytest.raises(agent.AgentError, match="schema"):
         await agent.run_claude(str(FAKE_CLAUDE), "x", schema, tools="", budget=1, timeout=20, cwd=tmp_path)
+
+
+def test_allowed_tools_scopes_reads_to_work_dir():
+    assert agent.allowed_tools(agent.WEB_TOOLS) == "WebSearch,WebFetch,Read(./**)"
+    assert agent.allowed_tools(agent.READ_TOOLS) == "Read(./**)"
+    assert agent.allowed_tools("") == ""
+    assert "Read," not in agent.allowed_tools(agent.WEB_TOOLS) + ","

@@ -41,25 +41,18 @@ class Notifier:
             raise NotifyError("no AgentMail inbox available; set CINDER_AGENTMAIL_INBOX")
         return inboxes[0]["inbox_id"]
 
-    async def send(self, subject: str, text: str) -> bool:
-        if not self.cfg.notify_email:
-            log.info("CINDER_NOTIFY_EMAIL not set; skipping email")
+    async def send(self, subject: str, text: str, html: str | None = None, to: str | None = None) -> bool:
+        to = to or self.cfg.notify_email
+        if not to:
+            log.info("no recipient set; skipping email")
             return False
         async with httpx.AsyncClient(timeout=30, transport=self.transport) as client:
             base = await self._base(client)
             inbox = await self._inbox(client, base)
             resp = await client.post(
                 f"{base}/v0/inboxes/{inbox}/messages/send",
-                json={"to": [self.cfg.notify_email], "subject": subject, "text": text},
+                json={"to": [to], "subject": subject, "text": text, **({"html": html} if html else {})},
             )
             if resp.status_code >= 400:
                 raise NotifyError(f"AgentMail send failed: {resp.status_code}")
         return True
-
-    async def deck_ready(self, new_cards: int, total: int) -> bool:
-        plural = "s" if new_cards != 1 else ""
-        return await self.send(
-            "Your Cinder deck is ready",
-            f"{new_cards} new idea card{plural} today · {total} in your deck.\n\n"
-            f"Open your deck: {self.cfg.base_url}/\n",
-        )

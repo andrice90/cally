@@ -83,6 +83,7 @@ class SettingsIn(BaseModel):
     mix_projects: int | None = Field(default=None, ge=0, le=30)
     max_repos: int | None = Field(default=None, ge=1, le=200)
     demo_mode: bool | None = None
+    notify_email: str | None = Field(default=None, max_length=254, pattern=r"^$|^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def create_app(
@@ -371,7 +372,7 @@ def create_app(
     @app.get("/api/settings")
     async def get_settings(user: str = Depends(require_user)):
         s = db.settings()
-        return {k: s[k] for k in ("tz", "ready_by", "deck_size", "mix_features", "mix_projects", "max_repos", "demo_mode")}
+        return {k: s[k] for k in ("tz", "ready_by", "deck_size", "mix_features", "mix_projects", "max_repos", "demo_mode", "notify_email")}
 
     @app.put("/api/settings")
     async def put_settings(body: SettingsIn, user: str = Depends(require_user)):
@@ -386,6 +387,17 @@ def create_app(
             reset_demo(demo.db)  # every demo starts from a fresh deck
         db.set_settings(values)
         return await get_settings(user)
+
+    @app.post("/api/summary/test")
+    async def summary_test(user: str = Depends(require_user)):
+        to = cinder.summary_recipient()
+        if not to:
+            raise HTTPException(409, "Add an email address first.")
+        try:
+            await cur().send_daily_summary(force=True, to=to)
+        except Exception as exc:
+            raise HTTPException(502, f"Email not sent. {str(exc)[:200]}")
+        return {"ok": True}
 
     @app.post("/api/demo/reset")
     async def demo_reset(user: str = Depends(require_user)):

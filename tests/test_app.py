@@ -102,9 +102,8 @@ def test_daily_run_fills_deck(client, gh, mail, env):
     assert not any(c.get("repo") == "org/old-fork" for c in cards)
     # Unsafe evidence URLs are dropped.
     assert all(e["url"].startswith("http") for c in cards for e in c["evidence"])
-    # Email sent.
-    assert mail.sent and mail.sent[0]["subject"] == "Your Cinder deck is ready"
-    assert mail.sent[0]["to"] == ["owner@example.com"]
+    # Manual runs don't email; the daily summary goes out after scheduled runs.
+    assert mail.sent == []
     # The ideation call got web tools, never Bash/Edit/Write, and ran in the work dir.
     calls = [json.loads(l) for l in (env / "claude.log").read_text().splitlines()]
     ide = [c for c in calls if '"cards"' in c["argv"][c["argv"].index("--json-schema") + 1]][0]
@@ -360,3 +359,60 @@ def test_demo_mode_is_isolated(client, gh, env):
     client.put("/api/settings", json={"demo_mode": False}, headers=ORIGIN)
     assert [c["id"] for c in client.get("/api/deck").json()["cards"]] == real_deck
     assert client.get("/api/repos").json()["repos"] == real_repos
+
+
+# ---------- daily summary email ----------
+def test_daily_summary_after_scheduled_run(client, mail, gh):
+    tok = client.app_cfg.wake_token
+    with client.stream("POST", "/hooks/wake", headers={"Authorization": f"Bearer {tok}"}) as r:
+        list(r.iter_lines())
+    wait_for(lambda: mail.sent)
+    m = mail.sent[0]
+    assert m["to"] == ["owner@example.com"]
+    assert m["subject"] == "Cinder: 10 ideas waiting"
+    assert "Waiting today (10, 10 new)" in m["text"]
+    assert "New specs yesterday" in m["text"] and "Open your deck: http://testserver/" in m["text"]
+    deck = client.get("/api/deck").json()["cards"]
+    assert deck[0]["title"] in m["text"] and "<b>" in m["html"]
+    # Once per day: a second scheduled run doesn't send another.
+    client.app.state.cinder.db.run("UPDATE runs SET status='failed'")
+    with client.stream("POST", "/hooks/wake", headers={"Authorization": f"Bearer {tok}"}) as r:
+        list(r.iter_lines())
+    import time; time.sleep(0.3)
+    assert len(mail.sent) == 1
+
+
+def test_summary_counts_yesterday(client, mail):
+    from datetime import UTC, datetime, timedelta
+    from cinder import summary
+    run_and_wait(client)
+    db = client.app.state.cinder.db
+    cards = client.get("/api/deck").json()["cards"]
+    y = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    db.run("UPDATE cards SET status='liked', decided_at=?, note='nice' WHERE id=?", (y, cards[0]["id"]))
+    db.run("UPDATE cards SET status='dismissed', decided_at=?, never=1 WHERE id=?", (y, cards[1]["id"]))
+    db.run("INSERT INTO specs(card_id, status, pr_url, created_at, updated_at) VALUES(?, 'pr_open', ?, ?, ?)",
+           (cards[0]["id"], "https://github.com/owner/alpha/pull/7", y, y))
+    d = summary.gather(db, "https://example.test", datetime.now(UTC))
+    text = summary.render_text(d)
+    assert len(d["waiting"]) == 8
+    assert d["saved"] == 1 and d["dismissed"] == 1 and d["never"] == 1 and d["notes"] == 1
+    assert f"- {cards[0]['title']}: https://github.com/owner/alpha/pull/7" in text
+    assert "Saved 1, dismissed 1 (1 marked never), 1 note." in text
+    assert summary.subject(d) == "Cinder: 8 ideas waiting, 1 new spec"
+    # Untrusted card text is escaped in the HTML version.
+    db.run("UPDATE cards SET title='<script>x</script>' WHERE id=?", (cards[2]["id"],))
+    h = summary.render_html(summary.gather(db, "https://example.test"))
+    assert "<script>" not in h and "&lt;script&gt;" in h
+
+
+def test_summary_settings_and_test_send(client, mail, monkeypatch):
+    monkeypatch.setattr(client.app.state.cinder.cfg, "notify_email", "")
+    assert post(client, "/api/summary/test").status_code == 409
+    assert client.put("/api/settings", json={"notify_email": "not-an-email"}, headers=ORIGIN).status_code == 422
+    s = client.put("/api/settings", json={"notify_email": "me@example.org"}, headers=ORIGIN).json()
+    assert s["notify_email"] == "me@example.org"
+    assert post(client, "/api/summary/test").status_code == 200
+    assert mail.sent[-1]["to"] == ["me@example.org"]
+    # A test send doesn't use up today's scheduled summary.
+    assert not client.app.state.cinder.db.settings()["summary_sent_date"]

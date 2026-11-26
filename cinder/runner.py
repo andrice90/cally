@@ -109,7 +109,7 @@ class Cinder:
                 (kind, "running", "starting", now(), local_date(self.db.settings()["tz"])),
             )
             self.run_id = run_id
-            self.run_task = asyncio.create_task(self._run(run_id))
+            self.run_task = asyncio.create_task(self._run(run_id, kind))
             return run_id
 
     async def maybe_catch_up(self, wake: bool = False) -> int | None:
@@ -128,7 +128,7 @@ class Cinder:
     def _add_cost(self, run_id: int, cost: float) -> None:
         self.db.run("UPDATE runs SET cost_usd = cost_usd + ? WHERE id=?", (cost, run_id))
 
-    async def _run(self, run_id: int) -> None:
+    async def _run(self, run_id: int, kind: str = "manual") -> None:
         try:
             new_cards, warning = await self.daily_pipeline(run_id)
             self.db.run(
@@ -153,6 +153,35 @@ class Cinder:
             )
         finally:
             self._prune_run_dirs()
+        if kind == "daily":
+            # One summary email per day, sent after the scheduled run whether it worked or not.
+            await self.send_daily_summary()
+
+    def summary_recipient(self) -> str:
+        return (self.db.settings().get("notify_email") or self.cfg.notify_email or "").strip()
+
+    async def send_daily_summary(self, force: bool = False, to: str | None = None) -> str:
+        """Email the daily summary through AgentMail. Returns 'sent', 'skipped' or 'no-address'."""
+        from . import summary
+        to = to or self.summary_recipient()
+        if not to:
+            return "no-address"
+        settings = self.db.settings()
+        today = local_date(settings["tz"])
+        if not force and settings.get("summary_sent_date") == today:
+            return "skipped"
+        data = summary.gather(self.db, self.cfg.base_url)
+        try:
+            await self.notifier.send(summary.subject(data), summary.render_text(data),
+                                     html=summary.render_html(data), to=to)
+        except Exception as exc:
+            log.warning("daily summary not sent: %s", exc)
+            if force:
+                raise
+            return "failed"
+        if not force:
+            self.db.set_settings({"summary_sent_date": today})
+        return "sent"
 
     def _prune_run_dirs(self) -> None:
         root = self.cfg.runs_dir
@@ -217,15 +246,7 @@ class Cinder:
             for card in cards:
                 self.db.add_card(c, run_id, card)
 
-        self._step(run_id, "notify")
-        warning = None
-        try:
-            total = len(self.db.deck())
-            await self.notifier.deck_ready(len(cards), total)
-        except Exception as exc:
-            log.warning("notify failed: %s", exc)
-            warning = f"email not sent: {str(exc)[:200]}"
-        return len(cards), warning
+        return len(cards), None
 
     def _write_context(self, work) -> None:
         profile = self.db.profile()["markdown"] or "(No profile yet: this developer hasn't swiped anything.)"

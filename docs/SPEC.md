@@ -39,7 +39,7 @@ Every swipe and note feeds a preference profile, so the next day's ideas fit you
 | Notes on swipes | On a right swipe → direction for the spec. On a left swipe → reason for passing (training signal). |
 | Extras | **Undo** last swipe; **"Never suggest things like this"** on dismiss. |
 | App login | GitHub OAuth, restricted to the owner's GitHub account. |
-| Morning alert | Email via AgentMail (already connected on this Sprite): "Your Cinder deck is ready". |
+| Morning alert | Daily summary email via the AgentMail Sprites connector after the scheduled run: what's waiting today, yesterday's new specs, and yesterday's activity. Recipient set in Settings. |
 
 ## 3. User experience
 
@@ -242,6 +242,7 @@ claude -p <prompt>
 - Run with `cwd` = the run's work directory (digests only), never the repo or `$HOME`.
 - Don't use `--bare`: it drops subscription (OAuth) auth.
 - No Bash, Edit or Write tools for any agent call; Cinder's own code does all GitHub writes.
+- `--allowedTools` pre-approves `Read(./**)`, never a bare `Read`: a bare rule approves reads of any path (such as `~/.cinder/env`). Reads outside the work dir would need a permission prompt, which `--permission-prompts none` denies.
 - Default budget caps (configurable): ideation $5, profile $0.50, spec $3, never-rule $0.20. Record `total_cost_usd` per call.
 - Timeouts: ideation 30 min, spec 15 min. Kill and mark failed on timeout.
 - Fallback: if the subscription CLI is unavailable, `ANTHROPIC_API_KEY` (via the Sprite's Anthropic gateway connection) can be used with the same flags.

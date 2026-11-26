@@ -522,6 +522,28 @@ async function loadSettings() {
       } }, "Save"), msg),
   ));
 
+  // Daily email
+  const mailInput = h("input", { id: "notify", type: "email", value: s.notify_email || "", autocomplete: "email" });
+  const testBtn = h("button", { class: "btn", type: "button", onclick: async () => {
+    testBtn.disabled = true;
+    try {
+      await api("/api/settings", { method: "PUT", body: { notify_email: mailInput.value.trim() } });
+      await api("/api/summary/test", { method: "POST" });
+      testBtn.textContent = "Sent";
+    } catch (e) { showError(e.message); }
+    setTimeout(() => { testBtn.disabled = false; testBtn.textContent = "Send test"; }, 2500);
+  } }, "Send test");
+  v.append(h("div", { class: "section" },
+    h("h3", { text: "Daily email" }),
+    h("label", { for: "notify", text: "Send to" }), mailInput,
+    h("div", { class: "row-actions mt12" },
+      h("button", { class: "btn primary", type: "button", onclick: async () => {
+        try { await api("/api/settings", { method: "PUT", body: { notify_email: mailInput.value.trim() } }); loadSettings(); }
+        catch (e) { showError(e.message); }
+      } }, "Save"),
+      testBtn),
+  ));
+
   // Repos
   const repoBox = h("div", {});
   if (!repos.repos.length) repoBox.append(h("p", { class: "muted small", text: "No repos synced." }));

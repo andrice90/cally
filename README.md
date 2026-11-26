@@ -4,7 +4,14 @@ A personal agent that reads your GitHub repos and, every morning, deals you a de
 idea cards: new features for your projects and new projects that build on them. Swipe right to get a full
 spec opened as a PR, left to pass, up to add a note. Your swipes teach it your taste.
 
-Full design: [`docs/SPEC.md`](docs/SPEC.md).
+Full design: [`docs/SPEC.md`](docs/SPEC.md). Built for Fly.io Hacksgiving 2026.
+
+## How it runs on a Sprite
+
+- **Agent:** the `claude` CLI in print mode, with read-only tools and web search, confined to a per-run work dir.
+- **Sprites connector:** AgentMail sends the daily summary email (what's waiting, yesterday's new specs, yesterday's activity).
+- **Sprite service:** one FastAPI process on port 8080 serves the swipe app and a wake hook that a GitHub Actions cron calls each morning.
+- **GitHub:** a fine-grained token reads repos and opens spec PRs.
 
 ## Run locally
 

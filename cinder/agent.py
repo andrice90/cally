@@ -88,6 +88,21 @@ def render(name: str, **values) -> str:
     return Template((PROMPTS / f"{name}.md").read_text()).safe_substitute(**values)
 
 
+def allowed_tools(tools: str) -> str:
+    """Pre-approve tools, scoping file reads to the work dir.
+
+    A bare "Read" would approve reads of any path (e.g. ~/.cinder/env). "Read(./**)" approves only the
+    work dir; anything else would need a permission prompt, which --permission-prompts none denies.
+    Glob and Grep inside the work dir need no approval, so they aren't listed.
+    """
+    out = []
+    for t in (t.strip() for t in tools.split(",")):
+        if not t or t in ("Glob", "Grep"):
+            continue
+        out.append("Read(./**)" if t == "Read" else t)
+    return ",".join(out)
+
+
 def _child_env() -> dict[str, str]:
     """The agent never sees Cinder's secrets."""
     drop = ("CINDER_", "GITHUB_", "AGENTMAIL")
@@ -112,7 +127,7 @@ async def run_claude(
         "--output-format", "json",
         "--json-schema", json.dumps(schema),
         "--tools", tools,
-        "--allowedTools", tools,
+        "--allowedTools", allowed_tools(tools),
         "--permission-prompts", "none",
         "--strict-mcp-config", "--mcp-config", str(mcp),
         "--setting-sources", "project",
