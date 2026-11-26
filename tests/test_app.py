@@ -374,6 +374,9 @@ def test_daily_summary_after_scheduled_run(client, mail, gh):
     assert "New specs yesterday" in m["text"] and "Open your deck: http://testserver/" in m["text"]
     deck = client.get("/api/deck").json()["cards"]
     assert deck[0]["title"] in m["text"] and "<b>" in m["html"]
+    assert "cid:cally-wordmark" in m["html"]
+    att = m["attachments"][0]
+    assert att["content_id"] == "cally-wordmark" and att["content_disposition"] == "inline" and att["content"]
     # Once per day: a second scheduled run doesn't send another.
     client.app.state.cally.db.run("UPDATE runs SET status='failed'")
     with client.stream("POST", "/hooks/wake", headers={"Authorization": f"Bearer {tok}"}) as r:

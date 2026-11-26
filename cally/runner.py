@@ -173,7 +173,8 @@ class Cally:
         data = summary.gather(self.db, self.cfg.base_url)
         try:
             await self.notifier.send(summary.subject(data), summary.render_text(data),
-                                     html=summary.render_html(data), to=to)
+                                     html=summary.render_html(data), to=to,
+                                     attachments=summary.attachments())
         except Exception as exc:
             log.warning("daily summary not sent: %s", exc)
             if force:

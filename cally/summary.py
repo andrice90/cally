@@ -129,44 +129,99 @@ def _safe_url(u: str | None) -> str | None:
     return u if u and u.startswith(("https://", "http://")) else None
 
 
+# Email styling mirrors the app's index cards: warm paper, rounded card, serif ink, ember accent.
+PAPER, CARD, INK, INK2, FAINT, LINE = "#f4eee6", "#fffdf9", "#2a211b", "#5b4d43", "#9a8a7d", "#e4d9cb"
+EMBER, EMBER_SOFT, BAD = "#d9481a", "#fde7da", "#b8322a"
+SERIF = "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif"
+SHADOW = "0 1px 1px rgba(70,45,25,.05),0 4px 8px rgba(70,45,25,.06),0 16px 32px rgba(70,45,25,.10)"
+WORDMARK_CID = "cally-wordmark"
+
+
+def attachments() -> list[dict]:
+    """The wordmark, attached inline (cid) so it shows without remote image loading."""
+    import base64
+    from pathlib import Path
+    png = (Path(__file__).parent / "static" / "wordmark-email.png").read_bytes()
+    return [{
+        "filename": "cally.png", "content_type": "image/png", "content_disposition": "inline",
+        "content_id": WORDMARK_CID, "content": base64.b64encode(png).decode(),
+    }]
+
+
+def _card(chip: str, count: str, title: str, pitch: str, rows: list[str], foot: str = "", extra: str = "") -> str:
+    e = html.escape
+    top = (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+        f'<td align="left"><span style="display:inline-block;background:{EMBER_SOFT};color:{INK2};font-style:italic;'
+        f'font-size:14px;padding:6px 12px;border-radius:99px">{e(chip)}</span></td>'
+        f'<td align="right" width="40"><div style="width:37px;height:37px;line-height:37px;text-align:center;'
+        f'border-radius:50%;border:1.5px solid {LINE};font-weight:bold;font-size:16px;color:{INK}">{e(count)}</div></td>'
+        "</tr></table>"
+    )
+    face = (
+        f'<div style="text-align:center;padding:28px 4px 20px">'
+        f'<div style="font-size:32px;line-height:1.12;font-weight:bold;letter-spacing:-.01em;color:{INK}">{e(title)}</div>'
+        f'<div style="width:44px;height:2px;background:{LINE};border-radius:2px;margin:16px auto;font-size:0;line-height:0">&nbsp;</div>'
+        f'<div style="font-size:18px;line-height:1.45;font-style:italic;color:{INK2}">{e(pitch)}</div></div>'
+    )
+    body = ""
+    if rows:
+        body = f'<div style="border-top:1px dashed {LINE};padding-top:8px">' + "".join(rows) + "</div>"
+    if foot:
+        body += f'<div style="margin-top:16px;text-align:center;color:{FAINT};font-size:13px;font-style:italic">{e(foot)}</div>'
+    body += extra
+    return (
+        f'<tr><td style="background:{CARD};border-radius:34px;box-shadow:{SHADOW};border:1px solid #efe6da;'
+        f'padding:24px 24px 24px">{top}{face}{body}</td></tr><tr><td style="height:20px;font-size:0;line-height:0">&nbsp;</td></tr>'
+    )
+
+
+def _row(title_html: str, meta: str = "") -> str:
+    m = f'<div style="font-size:13px;font-style:italic;color:{FAINT};margin-top:2px">{html.escape(meta)}</div>' if meta else ""
+    return f'<div style="padding:8px 0;font-size:15px;line-height:1.35;color:{INK}">{title_html}{m}</div>'
+
+
 def render_html(d: dict) -> str:
     e = html.escape
-    ink, faint, ember = "#2a211b", "#9a8a7d", "#d9481a"
-    h2 = f'style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:{ember};margin:28px 0 8px"'
-    li = 'style="margin:0 0 10px"'
-    parts = [f'<div style="font-family:Georgia,\'Iowan Old Style\',serif;color:{ink};max-width:560px;font-size:16px;line-height:1.5">']
+    n, k = len(d["waiting"]), len(d["opened"])
+    cards = []
     problem = _run_line(d)
     if problem:
-        parts.append(f'<p style="color:#b8322a">{e(problem)}</p>')
-    count = f"{len(d['waiting'])}" + (f", {d['new_today']} new" if d["new_today"] else "")
-    parts.append(f"<h2 {h2}>Waiting today ({e(count)})</h2>")
-    if d["waiting"]:
-        parts.append('<ul style="padding-left:18px;margin:0">')
-        for w in d["waiting"]:
-            meta = f"{_where(w)}, {EFFORT.get(w['effort'], w['effort'])}" + (", new" if w["new"] else "")
-            parts.append(
-                f'<li {li}><b>{e(w["title"])}</b><br><span style="color:{faint};font-style:italic">{e(meta)}</span></li>'
-            )
-        parts.append("</ul>")
-    else:
-        parts.append("<p>Nothing waiting.</p>")
-    parts.append(f"<h2 {h2}>New specs yesterday</h2>")
-    if d["opened"] or d["failed"]:
-        parts.append('<ul style="padding-left:18px;margin:0">')
-        for o in d["opened"]:
-            url = _safe_url(o["pr_url"])
-            link = f' <a href="{e(url)}" style="color:{ember}">View PR</a>' if url else ""
-            parts.append(f"<li {li}>{e(o['title'])}{link}</li>")
-        for f in d["failed"]:
-            parts.append(f"<li {li}>{e(f['title'])} <span style=\"color:#b8322a\">failed</span></li>")
-        parts.append("</ul>")
-    else:
-        parts.append("<p>None.</p>")
-    parts.append(f"<h2 {h2}>Yesterday</h2><p style=\"margin:0\">{e(_activity_line(d))}</p>")
-    if d["runs"]:
-        parts.append(f'<p style="margin:4px 0 0">{d["runs"]} run{"s" if d["runs"] != 1 else ""}, ${d["cost"]:.2f}.</p>')
-    parts.append(
-        f'<p style="margin:32px 0 0"><a href="{e(d["url"])}" style="background:{ember};color:#fff;padding:10px 18px;'
-        f'border-radius:99px;text-decoration:none;font-weight:bold">Open your deck</a></p></div>'
+        cards.append(
+            f'<tr><td style="background:#f9e1de;border-radius:24px;padding:16px 20px;color:{BAD};font-size:15px">'
+            f'{e(problem)}</td></tr><tr><td style="height:20px;font-size:0;line-height:0">&nbsp;</td></tr>'
+        )
+    # Today's deck
+    rows = [
+        _row(f"<b>{e(w['title'])}</b>", f"{_where(w)} · {EFFORT.get(w['effort'], w['effort'])}" + (" · new" if w["new"] else ""))
+        for w in d["waiting"]
+    ]
+    pitch = (f"{d['new_today']} new this morning." if d["new_today"] else "Nothing new this morning.") if n else "You're all caught up."
+    button = (
+        f'<div style="text-align:center;padding-top:20px"><a href="{e(d["url"])}" style="display:inline-block;'
+        f'background:{EMBER};color:#ffffff;font-weight:bold;font-size:17px;padding:14px 28px;border-radius:99px;'
+        f'text-decoration:none">Open your deck</a></div>'
     )
-    return "".join(parts)
+    cards.append(_card("Today's deck", str(n), f"{n} idea{'s' if n != 1 else ''} waiting", pitch, rows, extra=button))
+    # Yesterday
+    spec_rows = []
+    for o in d["opened"]:
+        url = _safe_url(o["pr_url"])
+        link = f' <a href="{e(url)}" style="color:{EMBER};font-style:italic;text-decoration:none">View PR</a>' if url else ""
+        spec_rows.append(_row(f"{e(o['title'])}{link}", _where(o)))
+    for f in d["failed"]:
+        spec_rows.append(_row(f'{e(f["title"])} <span style="color:{BAD};font-style:italic">failed</span>'))
+    foot = f"{d['runs']} run{'s' if d['runs'] != 1 else ''}, ${d['cost']:.2f}" if d["runs"] else ""
+    title = f"{k} new spec{'s' if k != 1 else ''}" if k else "No new specs"
+    cards.append(_card("Yesterday", str(k), title, _activity_line(d), spec_rows, foot))
+    return (
+        f'<!DOCTYPE html><html><head><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>'
+        f'<body style="margin:0;padding:0;background:{PAPER}">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="{PAPER}" style="background:{PAPER}">'
+        f'<tr><td align="center" style="padding:28px 14px 40px;font-family:{SERIF};color:{INK}">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">'
+        f'<tr><td align="center" style="padding:0 0 20px"><img src="cid:{WORDMARK_CID}" width="84" height="68" alt="cally" '
+        f'style="display:block;border:0"></td></tr>'
+        + "".join(cards)
+        + "</table></td></tr></table></body></html>"
+    )

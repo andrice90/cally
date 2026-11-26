@@ -41,7 +41,8 @@ class Notifier:
             raise NotifyError("no AgentMail inbox available; set CALLY_AGENTMAIL_INBOX")
         return inboxes[0]["inbox_id"]
 
-    async def send(self, subject: str, text: str, html: str | None = None, to: str | None = None) -> bool:
+    async def send(self, subject: str, text: str, html: str | None = None, to: str | None = None,
+                   attachments: list[dict] | None = None) -> bool:
         to = to or self.cfg.notify_email
         if not to:
             log.info("no recipient set; skipping email")
@@ -51,7 +52,8 @@ class Notifier:
             inbox = await self._inbox(client, base)
             resp = await client.post(
                 f"{base}/v0/inboxes/{inbox}/messages/send",
-                json={"to": [to], "subject": subject, "text": text, **({"html": html} if html else {})},
+                json={"to": [to], "subject": subject, "text": text, **({"html": html} if html else {}),
+                      **({"attachments": attachments} if attachments else {})},
             )
             if resp.status_code >= 400:
                 raise NotifyError(f"AgentMail send failed: {resp.status_code}")
