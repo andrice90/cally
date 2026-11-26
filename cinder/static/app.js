@@ -130,7 +130,7 @@ async function loadDeck() {
 
 function updateStatus(running, last) {
   const el = document.getElementById("status");
-  if (running) { el.textContent = `Dealing… ${last && last.step ? last.step : ""}`; el.className = "status-pill live"; }
+  if (running) { el.textContent = "Dealing"; el.className = "status-pill live"; }
   else el.className = "status-pill hidden";
 }
 
@@ -141,10 +141,9 @@ function renderDeck() {
     const running = deck.data && deck.data.running;
     const last = deck.data && deck.data.last_run;
     v.append(h("div", { class: "empty" },
-      h("div", { class: "glow", "aria-hidden": "true" }, "🔥"),
       running
-        ? [h("h2", { text: "Dealing your deck…" }), h("p", { text: `Researching ideas${last && last.step ? " (" + last.step + ")" : ""}. This can take a while.` })]
-        : [h("h2", { text: "You're all caught up" }), h("p", { text: `Next deck at ${readyLabel(deck.data ? deck.data.ready_by : "07:00")}.` })],
+        ? [h("h2", { text: "Dealing your deck" })]
+        : [h("h2", { text: "All caught up" }), h("p", { text: `Next deck at ${readyLabel(deck.data ? deck.data.ready_by : "07:00")}` })],
       last && last.status === "failed" && !running ? h("p", { class: "err", text: "Last run failed: " + (last.error || "unknown error") }) : null,
       running ? null : h("button", { class: "btn primary", type: "button", onclick: runNow }, "Run now"),
     ));
@@ -168,7 +167,6 @@ function renderDeck() {
       h("button", { class: "round note", type: "button", title: "Add a note (↑)", "aria-label": "Add a note", onclick: () => noteSheet(deck.cards[0]) }, "✎"),
       h("button", { class: "round save", type: "button", title: "Save (→)", "aria-label": "Save", onclick: () => commit("right") }, "♥"),
     ),
-    h("div", { class: "hint", text: `${deck.cards.length} in your deck · tap a card for details` }),
   ));
 }
 
@@ -190,7 +188,7 @@ function cardEl(card) {
     ),
     h("ul", { class: "why" }, (card.why || []).map((w) => h("li", { text: w }))),
     h("div", { class: "foot" },
-      note ? h("span", { class: "note-mark", text: "✎ Note attached" }) : h("span", { text: "Tap for details" }),
+      note ? h("span", { class: "note-mark", text: "Note attached" }) : null,
     ),
   );
 }
@@ -263,7 +261,7 @@ async function commit(direction, extra = {}) {
         { label: "Never like this", run: () => neverLike(card) },
       ]);
     } else {
-      toast("Saved · writing the spec", [{ label: "Undo", run: undo }]);
+      toast("Saved", [{ label: "Undo", run: undo }]);
       refreshSavedCount();
     }
   } catch (e) {
@@ -277,7 +275,7 @@ async function commit(direction, extra = {}) {
 async function neverLike(card) {
   try {
     await api(`/api/cards/${card.id}/never`, { method: "POST" });
-    toast("Got it. Cinder won't suggest ideas like this.");
+    toast("Rule added");
   } catch (e) { toast(e.message); }
 }
 
@@ -300,7 +298,7 @@ async function undo() {
 function noteSheet(card) {
   if (!card) return;
   sheet((close) => {
-    const ta = h("textarea", { id: "note", maxlength: "4000", placeholder: "Why you like it, what to change, or why you're passing…" });
+    const ta = h("textarea", { id: "note", maxlength: "4000", placeholder: "Note", "aria-label": "Note" });
     ta.value = deck.notes.get(card.id) || "";
     const attach = () => {
       const v = ta.value.trim();
@@ -311,13 +309,12 @@ function noteSheet(card) {
     return h("div", {},
       h("h3", { text: "Add a note" }),
       h("p", { class: "sub", text: card.title }),
-      h("label", { for: "note", text: "Saving? It steers the spec. Passing? It teaches Cinder your taste." }),
       ta,
       h("div", { class: "actions" },
         h("button", { class: "btn ghost", type: "button", onclick: close }, "Cancel"),
         h("button", { class: "btn", type: "button", onclick: attach }, "Attach note"),
-        h("button", { class: "btn", type: "button", onclick: () => go("left") }, "✕ Dismiss"),
-        h("button", { class: "btn primary", type: "button", onclick: () => go("right") }, "♥ Save"),
+        h("button", { class: "btn", type: "button", onclick: () => go("left") }, "Dismiss"),
+        h("button", { class: "btn primary", type: "button", onclick: () => go("right") }, "Save"),
       ),
     );
   });
@@ -326,7 +323,7 @@ function noteSheet(card) {
 async function runNow() {
   try {
     await api("/api/runs", { method: "POST" });
-    toast("Run started. New cards will appear here.");
+    toast("Run started");
     loadDeck();
   } catch (e) { toast(e.message); }
 }
@@ -335,10 +332,10 @@ async function runNow() {
 async function loadSaved() {
   let data;
   try { data = await api("/api/saved"); } catch (e) { return renderError(e); }
-  const labels = { queued: "Queued", writing: "Writing spec…", pr_open: "PR open", failed: "Failed" };
+  const labels = { queued: "Queued", writing: "Writing spec", pr_open: "PR open", failed: "Failed" };
   const v = view();
   v.replaceChildren(h("h2", { class: "page-title", text: "Saved" }));
-  if (!data.cards.length) v.append(h("p", { class: "muted", text: "Swipe right on an idea and Cinder will write a spec and open a PR for it." }));
+  if (!data.cards.length) v.append(h("p", { class: "muted", text: "Nothing saved yet." }));
   const list = h("div", { class: "list" });
   for (const c of data.cards) {
     list.append(h("div", { class: "item" },
@@ -348,7 +345,7 @@ async function loadSaved() {
       c.note ? h("div", { class: "note", text: c.note }) : null,
       h("div", { class: "meta" },
         h("span", { class: `chip ${c.spec_status || ""}`, text: labels[c.spec_status] || "—" }),
-        c.pr_url ? safeLink(c.pr_url, "View PR ↗") : null,
+        c.pr_url ? safeLink(c.pr_url, "View PR") : null,
         c.spec_status === "failed" ? h("button", { class: "btn", type: "button", onclick: async () => { try { await api(`/api/specs/${c.spec_id}/retry`, { method: "POST" }); loadSaved(); } catch (e) { toast(e.message); } } }, "Retry") : null,
         h("span", { text: fmtDate(c.decided_at) }),
         h("button", { class: "btn ghost", type: "button", onclick: () => detailSheet(c) }, "Details"),
@@ -384,11 +381,11 @@ async function loadHistory() {
       h("div", { class: "meta" },
         h("span", { class: `chip ${c.status}`, text: c.status === "liked" ? "Saved" : (c.never ? "Never like this" : "Dismissed") }),
         h("span", { text: fmtDate(c.decided_at) }),
-        c.pr_url ? safeLink(c.pr_url, "PR ↗") : null,
+        c.pr_url ? safeLink(c.pr_url, "View PR") : null,
         h("button", { class: "btn ghost", type: "button", onclick: () => detailSheet(c) }, "Details"),
         c.status === "dismissed" ? h("button", { class: "btn", type: "button", onclick: async () => {
-          try { await api(`/api/cards/${c.id}/resave`, { method: "POST", body: {} }); toast("Saved · writing the spec"); refreshSavedCount(); loadHistory(); } catch (e) { toast(e.message); }
-        } }, "♥ Save instead") : null,
+          try { await api(`/api/cards/${c.id}/resave`, { method: "POST", body: {} }); toast("Saved"); refreshSavedCount(); loadHistory(); } catch (e) { toast(e.message); }
+        } }, "Save instead") : null,
       ),
     ));
   }
@@ -432,7 +429,7 @@ async function loadSettings() {
       h("div", {}, h("label", { for: "size", text: "Deck size" }), size),
       h("div", {}, h("label", { for: "mf", text: "Features" }), mf),
       h("div", {}, h("label", { for: "mp", text: "New projects" }), mp)),
-    h("div", { class: "mt12" }, h("label", { for: "maxrepos", text: "Analyse the most recently active … repos" }), maxRepos),
+    h("div", { class: "mt12" }, h("label", { for: "maxrepos", text: "Repos to analyse" }), maxRepos),
     h("div", { class: "row-actions mt12" },
       h("button", { class: "btn primary", type: "button", onclick: async () => {
         try {
@@ -444,7 +441,7 @@ async function loadSettings() {
 
   // Repos
   const repoBox = h("div", {});
-  if (!repos.repos.length) repoBox.append(h("p", { class: "muted small", text: "No repos synced yet. Sync to list everything Cinder can read." }));
+  if (!repos.repos.length) repoBox.append(h("p", { class: "muted small", text: "No repos synced." }));
   for (const r of repos.repos) {
     const cb = h("input", { type: "checkbox", "aria-label": `Include ${r.full_name}` });
     cb.checked = !r.excluded;
@@ -465,12 +462,12 @@ async function loadSettings() {
 
   // Never rules
   const ruleBox = h("div", {});
-  if (!rules.rules.length) ruleBox.append(h("p", { class: "muted small", text: "None yet. Tap “Never like this” after dismissing a card." }));
+  if (!rules.rules.length) ruleBox.append(h("p", { class: "muted small", text: "None." }));
   for (const r of rules.rules) {
     ruleBox.append(h("div", { class: "rule" },
       h("span", { class: "t", text: r.text }),
-      h("button", { class: "iconbtn", type: "button", title: "Edit", "aria-label": "Edit rule", onclick: () => editRule(r) }, "✎"),
-      h("button", { class: "iconbtn", type: "button", title: "Remove", "aria-label": "Remove rule", onclick: async () => { try { await api(`/api/never-rules/${r.id}`, { method: "DELETE" }); loadSettings(); } catch (e) { toast(e.message); } } }, "✕")));
+      h("button", { class: "iconbtn", type: "button", title: "Edit", "aria-label": "Edit rule", onclick: () => editRule(r) }, "Edit"),
+      h("button", { class: "iconbtn", type: "button", title: "Remove", "aria-label": "Remove rule", onclick: async () => { try { await api(`/api/never-rules/${r.id}`, { method: "DELETE" }); loadSettings(); } catch (e) { toast(e.message); } } }, "Remove")));
   }
   v.append(h("div", { class: "section" }, h("h3", { text: "Never like this" }), ruleBox));
 
@@ -480,8 +477,8 @@ async function loadSettings() {
       if (!confirm("Reset the preference profile? Cinder will forget what it has learned from your swipes so far.")) return;
       try { await api("/api/profile", { method: "DELETE" }); loadSettings(); } catch (e) { toast(e.message); }
     } }, "Reset")),
-    profile.markdown ? h("pre", { class: "profile", text: profile.markdown }) : h("p", { class: "muted small", text: "Nothing learned yet. The profile updates at the start of each daily run from your swipes and notes." }),
-    profile.updated_at ? h("p", { class: "small muted", text: "Updated " + fmtDate(profile.updated_at) }) : null));
+    profile.markdown ? h("pre", { class: "profile", text: profile.markdown }) : h("p", { class: "muted small", text: "Nothing learned yet." }),
+  ));
 
   v.append(h("div", { class: "section" },
     h("h3", {}, "Account", h("button", { class: "btn", type: "button", onclick: async () => { await api("/auth/logout", { method: "POST" }).catch(() => {}); location.href = "/login"; } }, "Sign out"))));
@@ -493,7 +490,7 @@ function editRule(rule) {
     inp.value = rule.text;
     return h("div", {},
       h("h3", { text: "Edit rule" }),
-      h("label", { for: "rule", text: "Cinder will never suggest ideas matching:" }), inp,
+      h("label", { for: "rule", text: "Rule" }), inp,
       h("div", { class: "actions" },
         h("button", { class: "btn ghost", type: "button", onclick: close }, "Cancel"),
         h("button", { class: "btn primary", type: "button", onclick: async () => {
@@ -517,7 +514,7 @@ async function refreshSavedCount() {
     const d = await api("/api/saved");
     const n = d.cards.filter((c) => ["queued", "writing", "failed"].includes(c.spec_status)).length;
     const el = document.getElementById("saved-count");
-    el.replaceChildren(n ? h("span", { class: "badge-count", text: n }) : "");
+    el.replaceChildren(n ? ` (${n})` : "");
   } catch (_) {}
 }
 
