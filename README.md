@@ -42,3 +42,7 @@ Tests use a fake `claude` binary (`tests/fake_claude.py`), an in-memory GitHub A
    `sprite-env services restart cally`.
 4. Add repo secrets `CALLY_WAKE_URL` (the Sprite URL) and `CALLY_WAKE_TOKEN` (from `~/.cally/env`)
    for `.github/workflows/cally-wake.yml`.
+
+## License
+
+Cally is open source under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
