@@ -95,7 +95,7 @@ def load_config() -> Config:
         github_mode=get("CALLY_GITHUB_MODE", "gateway"),
         github_token=get("GITHUB_TOKEN"),
         github_api_url=get("CALLY_GITHUB_API_URL").rstrip("/"),
-        home_repo=get("CALLY_HOME_REPO", "andrice90/cinder"),
+        home_repo=get("CALLY_HOME_REPO", "andrice90/cally"),
         owner_login=get("CALLY_OWNER_LOGIN"),
         oauth_client_id=get("GITHUB_OAUTH_CLIENT_ID"),
         oauth_client_secret=get("GITHUB_OAUTH_CLIENT_SECRET"),

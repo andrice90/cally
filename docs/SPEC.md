@@ -1,6 +1,6 @@
 # Cally — Product & Technical Spec
 
-> Status: approved for build (v1). Lives in this repo (`andrice90/cinder`, formerly `andrice90/fly-agent`).
+> Status: approved for build (v1). Lives in this repo (`andrice90/cally`, formerly `andrice90/cally` and `andrice90/fly-agent`).
 
 ## 1. What Cally is
 
@@ -261,7 +261,7 @@ claude -p <prompt>
 | `CALLY_BASE_URL` | e.g. `https://hacksgiving-b6x4r.sprites.app` |
 | `CALLY_GITHUB_MODE` | `gateway` (Sprite API gateway, no token) or `token` |
 | `GITHUB_TOKEN` | Only if mode is `token` (fine-grained PAT) |
-| `CALLY_HOME_REPO` | `andrice90/cinder` (default) |
+| `CALLY_HOME_REPO` | `andrice90/cally` (default) |
 | `CALLY_OWNER_LOGIN` | GitHub username allowed to log in |
 | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | Login OAuth app |
 | `CALLY_SESSION_SECRET` | Cookie signing (auto-generated) |
