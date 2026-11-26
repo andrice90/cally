@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from .config import Config, load_config
 from .db import DB
+from .fixtures import reset_demo
 from .github import GitHub
 from .notify import Notifier
 from .runner import Cinder, UndoRefused
@@ -81,6 +82,7 @@ class SettingsIn(BaseModel):
     mix_features: int | None = Field(default=None, ge=0, le=30)
     mix_projects: int | None = Field(default=None, ge=0, le=30)
     max_repos: int | None = Field(default=None, ge=1, le=200)
+    demo_mode: bool | None = None
 
 
 def create_app(
@@ -95,6 +97,13 @@ def create_app(
         async def github_factory():
             return await GitHub.create(cfg)
     cinder = Cinder(cfg, db, github_factory, notifier or Notifier(cfg))
+    # Demo mode: a separate database with generic content; no agent calls, GitHub or email.
+    demo = Cinder(cfg, DB(cfg.home / "demo.db"), github_factory, notifier or Notifier(cfg), demo=True)
+    if not demo.db.one("SELECT 1 FROM cards LIMIT 1"):
+        reset_demo(demo.db)
+
+    def cur() -> Cinder:
+        return demo if db.settings().get("demo_mode") else cinder
     signer = URLSafeTimedSerializer(cfg.session_secret, salt="cinder-session")
     secure_cookie = cfg.base_url.startswith("https://")
     wake_limit = RateLimit(6, 3600)
@@ -281,7 +290,7 @@ def create_app(
 
     # ---------- API ----------
     def run_status() -> dict:
-        r = db.one("SELECT id, kind, status, step, started_at, finished_at, cost_usd, new_cards, error "
+        r = cur().db.one("SELECT id, kind, status, step, started_at, finished_at, cost_usd, new_cards, error "
                    "FROM runs ORDER BY id DESC LIMIT 1")
         return r or {}
 
@@ -291,11 +300,11 @@ def create_app(
 
     @app.get("/api/deck")
     async def deck(user: str = Depends(require_user)):
-        await cinder.maybe_catch_up()
+        await cur().maybe_catch_up()
         s = db.settings()
         return {
-            "cards": db.deck(),
-            "running": cinder.running,
+            "cards": cur().db.deck(),
+            "running": cur().running,
             "next_ready": next_ready(s["tz"], s["ready_by"]).isoformat(),
             "ready_by": s["ready_by"],
             "last_run": run_status(),
@@ -304,7 +313,7 @@ def create_app(
     @app.post("/api/cards/{card_id}/swipe")
     async def swipe(card_id: int, body: SwipeIn, user: str = Depends(require_user)):
         try:
-            return cinder.swipe(card_id, body.direction, body.note, body.never)
+            return cur().swipe(card_id, body.direction, body.note, body.never)
         except KeyError:
             raise HTTPException(404, "no such card")
         except ValueError as exc:
@@ -313,14 +322,14 @@ def create_app(
     @app.post("/api/cards/{card_id}/never")
     async def never(card_id: int, user: str = Depends(require_user)):
         try:
-            return {"rule_id": cinder.never_existing(card_id)}
+            return {"rule_id": cur().never_existing(card_id)}
         except ValueError as exc:
             raise HTTPException(409, str(exc))
 
     @app.post("/api/cards/{card_id}/resave")
     async def resave(card_id: int, body: NoteIn, user: str = Depends(require_user)):
         try:
-            cinder.resave(card_id, body.note)
+            cur().resave(card_id, body.note)
         except ValueError as exc:
             raise HTTPException(409, str(exc))
         return {"ok": True}
@@ -328,33 +337,33 @@ def create_app(
     @app.post("/api/undo")
     async def undo(user: str = Depends(require_user)):
         try:
-            return cinder.undo()
+            return cur().undo()
         except UndoRefused as exc:
             raise HTTPException(409, str(exc))
 
     @app.get("/api/saved")
     async def saved(user: str = Depends(require_user)):
-        rows = db.all(
+        rows = cur().db.all(
             "SELECT c.*, s.id AS spec_id, s.status AS spec_status, s.pr_url, s.error AS spec_error "
             "FROM cards c LEFT JOIN specs s ON s.card_id = c.id WHERE c.status='liked' ORDER BY c.decided_at DESC"
         )
-        return {"cards": [db.card_out(r) for r in rows]}
+        return {"cards": [cur().db.card_out(r) for r in rows]}
 
     @app.get("/api/history")
     async def history(filter: Literal["all", "liked", "dismissed"] = "all", user: str = Depends(require_user)):
         where = "c.status != 'pending'" if filter == "all" else "c.status = ?"
         args = () if filter == "all" else (filter,)
-        rows = db.all(
+        rows = cur().db.all(
             "SELECT c.*, s.status AS spec_status, s.pr_url FROM cards c LEFT JOIN specs s ON s.card_id=c.id "
             f"WHERE {where} ORDER BY c.decided_at DESC LIMIT 500",
             args,
         )
-        return {"cards": [db.card_out(r) for r in rows]}
+        return {"cards": [cur().db.card_out(r) for r in rows]}
 
     @app.post("/api/specs/{spec_id}/retry")
     async def retry(spec_id: int, user: str = Depends(require_user)):
         try:
-            cinder.retry_spec(spec_id)
+            cur().retry_spec(spec_id)
         except ValueError as exc:
             raise HTTPException(409, str(exc))
         return {"ok": True}
@@ -362,7 +371,7 @@ def create_app(
     @app.get("/api/settings")
     async def get_settings(user: str = Depends(require_user)):
         s = db.settings()
-        return {k: s[k] for k in ("tz", "ready_by", "deck_size", "mix_features", "mix_projects", "max_repos")}
+        return {k: s[k] for k in ("tz", "ready_by", "deck_size", "mix_features", "mix_projects", "max_repos", "demo_mode")}
 
     @app.put("/api/settings")
     async def put_settings(body: SettingsIn, user: str = Depends(require_user)):
@@ -373,18 +382,27 @@ def create_app(
                 ZoneInfo(values["tz"])
             except (ZoneInfoNotFoundError, ValueError):
                 raise HTTPException(422, "unknown time zone")
+        if values.get("demo_mode") and not db.settings().get("demo_mode"):
+            reset_demo(demo.db)  # every demo starts from a fresh deck
         db.set_settings(values)
         return await get_settings(user)
 
+    @app.post("/api/demo/reset")
+    async def demo_reset(user: str = Depends(require_user)):
+        reset_demo(demo.db)
+        return {"ok": True}
+
     @app.get("/api/repos")
     async def repos(user: str = Depends(require_user)):
-        rows = db.all("SELECT id, full_name, description, pushed_at, archived, fork, private, excluded, "
+        rows = cur().db.all("SELECT id, full_name, description, pushed_at, archived, fork, private, excluded, "
                       "digest IS NOT NULL AS has_digest FROM repos ORDER BY pushed_at DESC")
         return {"repos": rows}
 
     @app.post("/api/repos/sync")
     async def repos_sync(user: str = Depends(require_user)):
         from .digest import sync_repos
+        if cur().demo:
+            return {"count": len(demo.db.all("SELECT id FROM repos"))}
         try:
             gh = await github_factory()
         except Exception as exc:
@@ -399,57 +417,57 @@ def create_app(
 
     @app.put("/api/repos/{repo_id}")
     async def put_repo(repo_id: int, body: RepoIn, user: str = Depends(require_user)):
-        n = db.run("UPDATE repos SET excluded=?, excluded_set=1 WHERE id=?", (int(body.excluded), repo_id))
+        n = cur().db.run("UPDATE repos SET excluded=?, excluded_set=1 WHERE id=?", (int(body.excluded), repo_id))
         if not n:
             raise HTTPException(404, "no such repo")
         return {"ok": True}
 
     @app.get("/api/profile")
     async def profile(user: str = Depends(require_user)):
-        p = db.profile()
+        p = cur().db.profile()
         return {"markdown": p["markdown"], "updated_at": p["updated_at"]}
 
     @app.delete("/api/profile")
     async def reset_profile(user: str = Depends(require_user)):
         # Reset forgets learned preferences, including swipes made so far.
-        latest = db.one("SELECT MAX(decided_at) AS t FROM cards") or {}
-        db.set_profile("", latest.get("t") or "")
+        latest = cur().db.one("SELECT MAX(decided_at) AS t FROM cards") or {}
+        cur().db.set_profile("", latest.get("t") or "")
         return {"ok": True}
 
     @app.get("/api/never-rules")
     async def rules(user: str = Depends(require_user)):
-        return {"rules": db.all("SELECT id, text, card_id, created_at FROM never_rules ORDER BY id DESC")}
+        return {"rules": cur().db.all("SELECT id, text, card_id, created_at FROM never_rules ORDER BY id DESC")}
 
     @app.get("/api/never-rules/{rule_id}")
     async def rule(rule_id: int, user: str = Depends(require_user)):
-        r = db.one("SELECT id, text, card_id, created_at FROM never_rules WHERE id=?", (rule_id,))
+        r = cur().db.one("SELECT id, text, card_id, created_at FROM never_rules WHERE id=?", (rule_id,))
         if not r:
             raise HTTPException(404)
         return r
 
     @app.put("/api/never-rules/{rule_id}")
     async def edit_rule(rule_id: int, body: RuleIn, user: str = Depends(require_user)):
-        if not db.run("UPDATE never_rules SET text=? WHERE id=?", (body.text.strip(), rule_id)):
+        if not cur().db.run("UPDATE never_rules SET text=? WHERE id=?", (body.text.strip(), rule_id)):
             raise HTTPException(404)
         return {"ok": True}
 
     @app.delete("/api/never-rules/{rule_id}")
     async def delete_rule(rule_id: int, user: str = Depends(require_user)):
-        db.run("UPDATE cards SET never=0 WHERE id=(SELECT card_id FROM never_rules WHERE id=?)", (rule_id,))
-        if not db.run("DELETE FROM never_rules WHERE id=?", (rule_id,)):
+        cur().db.run("UPDATE cards SET never=0 WHERE id=(SELECT card_id FROM never_rules WHERE id=?)", (rule_id,))
+        if not cur().db.run("DELETE FROM never_rules WHERE id=?", (rule_id,)):
             raise HTTPException(404)
         return {"ok": True}
 
     @app.post("/api/runs")
     async def run_now(user: str = Depends(require_user)):
-        run_id = await cinder.start_run("manual")
+        run_id = await cur().start_run("manual")
         return {"run_id": run_id}
 
     @app.get("/api/runs/latest")
     async def runs_latest(user: str = Depends(require_user)):
-        recent = db.all("SELECT id, kind, status, step, started_at, finished_at, cost_usd, new_cards, error "
+        recent = cur().db.all("SELECT id, kind, status, step, started_at, finished_at, cost_usd, new_cards, error "
                         "FROM runs ORDER BY id DESC LIMIT 10")
-        return {"latest": recent[0] if recent else None, "recent": recent, "running": cinder.running}
+        return {"latest": recent[0] if recent else None, "recent": recent, "running": cur().running}
 
     # ---------- wake hook ----------
     @app.post("/hooks/wake")

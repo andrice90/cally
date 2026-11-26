@@ -461,6 +461,24 @@ async function loadSettings() {
   const v = view();
   v.replaceChildren(h("h2", { class: "page-title", text: "Settings" }));
 
+  // Demo mode
+  const demoCb = h("input", { type: "checkbox", "aria-label": "Demo mode" });
+  demoCb.checked = !!s.demo_mode;
+  demoCb.addEventListener("change", async () => {
+    try {
+      await api("/api/settings", { method: "PUT", body: { demo_mode: demoCb.checked } });
+      deck.notes.clear();
+      refreshSavedCount();
+      loadSettings();
+    } catch (e) { demoCb.checked = !demoCb.checked; showError(e.message); }
+  });
+  v.append(h("div", { class: "section demo-section" },
+    h("h3", {}, h("span", { class: "nowrap", text: "Demo mode" }), h("label", { class: "switch" }, demoCb, h("span", {}))),
+    s.demo_mode ? h("div", { class: "mt12" }, h("button", { class: "btn", type: "button", onclick: async () => {
+      try { await api("/api/demo/reset", { method: "POST" }); deck.notes.clear(); refreshSavedCount(); loadSettings(); } catch (e) { showError(e.message); }
+    } }, "Reset demo")) : null,
+  ));
+
   // Runs
   const runRows = runs.recent.length ? runs.recent.map((r) => h("div", { class: "run" },
     h("span", { class: `chip ${r.status === "succeeded" ? "pr_open" : r.status === "failed" ? "failed" : "writing"}`, text: r.status }),
@@ -535,11 +553,28 @@ async function loadSettings() {
       if (!confirm("Reset the preference profile? Cinder will forget what it has learned from your swipes so far.")) return;
       try { await api("/api/profile", { method: "DELETE" }); loadSettings(); } catch (e) { showError(e.message); }
     } }, "Reset")),
-    profile.markdown ? h("pre", { class: "profile", text: profile.markdown }) : h("p", { class: "muted small", text: "Nothing learned yet." }),
+    profile.markdown ? profileEl(profile.markdown) : h("p", { class: "muted small", text: "Nothing learned yet." }),
   ));
 
   v.append(h("div", { class: "section" },
     h("h3", {}, "Account", h("button", { class: "btn", type: "button", onclick: async () => { await api("/auth/logout", { method: "POST" }).catch(() => {}); location.href = "/login"; } }, "Sign out"))));
+}
+
+// Minimal markdown for the profile: "## " headings and "- " lists; everything as plain text.
+function profileEl(md) {
+  const box = h("div", { class: "profile" });
+  let list = null;
+  for (const raw of md.split("\n")) {
+    const line = raw.trim();
+    if (!line) { list = null; continue; }
+    const head = line.match(/^#{1,6}\s+(.*)$/);
+    const item = line.match(/^[-*]\s+(.*)$/);
+    const clean = (t) => t.replace(/\*\*(.+?)\*\*/g, "$1").replace(/(^|\s)[*_](.+?)[*_](?=\s|$|[.,;:])/g, "$1$2");
+    if (head) { list = null; box.append(h("h4", { text: clean(head[1]) })); }
+    else if (item) { if (!list) { list = h("ul", {}); box.append(list); } list.append(h("li", { text: clean(item[1]) })); }
+    else { list = null; box.append(h("p", { text: clean(line) })); }
+  }
+  return box;
 }
 
 function editRule(rule) {

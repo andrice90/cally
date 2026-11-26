@@ -307,3 +307,56 @@ def test_digest_contents_and_cache(client, gh):
     n = sum(1 for m, p in gh.calls if p == "/repos/owner/alpha/readme")
     run_and_wait(client)
     assert sum(1 for m, p in gh.calls if p == "/repos/owner/alpha/readme") == n  # cached
+
+
+# ---------- demo mode ----------
+def _claude_calls(env):
+    log = env / "claude.log"
+    return len(log.read_text().splitlines()) if log.exists() else 0
+
+
+def test_demo_mode_is_isolated(client, gh, env):
+    run_and_wait(client)
+    real_deck = [c["id"] for c in client.get("/api/deck").json()["cards"]]
+    real_repos = client.get("/api/repos").json()["repos"]
+    calls = _claude_calls(env)
+
+    s = client.put("/api/settings", json={"demo_mode": True}, headers=ORIGIN).json()
+    assert s["demo_mode"] is True
+    deck = client.get("/api/deck").json()
+    assert len(deck["cards"]) == 10 and not deck["running"]
+    assert all((c.get("repo") or "demo/").startswith("demo/") for c in deck["cards"])
+    repos = client.get("/api/repos").json()["repos"]
+    assert repos and all(r["full_name"].startswith("demo/") for r in repos)
+    assert len(client.get("/api/history").json()["cards"]) == 3
+    assert client.get("/api/profile").json()["markdown"]
+    assert client.get("/api/never-rules").json()["rules"]
+
+    # Swipe and undo the same card over and over.
+    first = deck["cards"][0]
+    for direction in ("right", "left", "right", "left"):
+        assert post(client, f"/api/cards/{first['id']}/swipe", {"direction": direction, "note": "x"}).status_code == 200
+        r = post(client, "/api/undo").json()
+        assert r["card_id"] == first["id"]
+    post(client, f"/api/cards/{first['id']}/swipe", {"direction": "left"})
+    post(client, f"/api/cards/{first['id']}/never")
+    post(client, f"/api/cards/{deck['cards'][1]['id']}/swipe", {"direction": "right"})
+    import time; time.sleep(0.3)
+    # Nothing left the sandbox: no agent calls, no PRs, no GitHub traffic from sync.
+    n_gh = len(gh.calls)
+    assert post(client, "/api/repos/sync").json() == {"count": 8}
+    assert len(gh.calls) == n_gh
+    assert gh.pulls == []
+    assert _claude_calls(env) == calls
+    # Run now deals a fresh demo deck.
+    assert post(client, "/api/runs").status_code == 200
+    assert len(client.get("/api/deck").json()["cards"]) == 10
+    # Reset also restores it.
+    post(client, f"/api/cards/{deck['cards'][0]['id']}/swipe", {"direction": "left"})
+    assert post(client, "/api/demo/reset").status_code == 200
+    assert len(client.get("/api/deck").json()["cards"]) == 10
+
+    # Back to real data, untouched.
+    client.put("/api/settings", json={"demo_mode": False}, headers=ORIGIN)
+    assert [c["id"] for c in client.get("/api/deck").json()["cards"]] == real_deck
+    assert client.get("/api/repos").json()["repos"] == real_repos

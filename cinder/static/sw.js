@@ -1,5 +1,5 @@
 // App shell cache only; the API always goes to the network (no offline writes in v1).
-const CACHE = "cinder-shell-v6";
+const CACHE = "cinder-shell-v7";
 const SHELL = ["/static/app.css", "/static/app.js", "/static/icon.svg", "/static/icon-192.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

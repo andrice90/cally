@@ -58,8 +58,9 @@ GitHubFactory = Callable[[], Awaitable[GitHub]]
 
 
 class Cinder:
-    def __init__(self, cfg: Config, db: DB, github_factory: GitHubFactory, notifier: Notifier):
+    def __init__(self, cfg: Config, db: DB, github_factory: GitHubFactory, notifier: Notifier, demo: bool = False):
         self.cfg = cfg
+        self.demo = demo  # demo store: no agent calls, GitHub or email; Run now re-deals the demo deck
         self.db = db
         self.github_factory = github_factory
         self.notifier = notifier
@@ -96,6 +97,10 @@ class Cinder:
         return self.run_task is not None and not self.run_task.done()
 
     async def start_run(self, kind: str) -> int:
+        if self.demo:
+            from .fixtures import reset_demo
+            reset_demo(self.db)
+            return 0
         async with self._run_lock:
             if self.running:
                 return self.run_id
@@ -108,6 +113,8 @@ class Cinder:
             return run_id
 
     async def maybe_catch_up(self, wake: bool = False) -> int | None:
+        if self.demo:
+            return None
         if self.running:
             return self.run_id
         if run_due(self.db, self.db.settings(), wake=wake):
@@ -328,7 +335,7 @@ class Cinder:
                 rule_id = cur.lastrowid
         if status == "liked":
             self.spec_wakeup.set()
-        if rule_id:
+        if rule_id and not self.demo:
             self.spawn(self._refine_never_rule(rule_id, card_id))
         return {"status": status}
 
@@ -346,7 +353,8 @@ class Cinder:
                 "INSERT INTO never_rules(text, card_id, created_at) VALUES(?,?,?)",
                 (f"Ideas like: {row['title']}", card_id, now()),
             ).lastrowid
-        self.spawn(self._refine_never_rule(rule_id, card_id))
+        if not self.demo:
+            self.spawn(self._refine_never_rule(rule_id, card_id))
         return rule_id
 
     async def _refine_never_rule(self, rule_id: int, card_id: int) -> None:

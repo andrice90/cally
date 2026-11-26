@@ -94,6 +94,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "budget_profile": 0.5,
     "budget_spec": 3.0,
     "budget_never_rule": 0.2,
+    "demo_mode": False,
 }
 
 

@@ -12,7 +12,7 @@ def main() -> None:
     s = sub.add_parser("serve", help="run the web app")
     s.add_argument("--host", default="0.0.0.0")
     s.add_argument("--port", type=int, default=8080)
-    sub.add_parser("seed-demo", help="add fixture cards to the deck (development)")
+    sub.add_parser("seed-demo", help="reset the demo-mode database to fresh generic content")
     sub.add_parser("info", help="show config status and the login access code")
     args = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -27,8 +27,9 @@ def main() -> None:
                     proxy_headers=True, forwarded_allow_ips="*", log_level="info")
     elif args.cmd == "seed-demo":
         from .db import DB
-        from .fixtures import seed
-        print(f"added {seed(DB(cfg.db_path))} demo cards")
+        from .fixtures import reset_demo
+        reset_demo(DB(cfg.home / "demo.db"))
+        print("demo deck reset")
     elif args.cmd == "info":
         print(f"home:         {cfg.home}")
         print(f"base url:     {cfg.base_url}")
