@@ -1,0 +1,36 @@
+name: Cinder wake
+
+# Sprites pause when idle and have no cron, so this wakes Cinder each morning and holds the request
+# open while it streams heartbeats, keeping the Sprite awake for the whole run (spec §8).
+on:
+  schedule:
+    - cron: "0 10 * * *"   # 4 am CST / 5 am CDT
+    - cron: "30 11 * * *"  # retry; does nothing if today's run already succeeded
+  workflow_dispatch:
+
+concurrency:
+  group: cinder-wake
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Wake Cinder and wait for the run
+        env:
+          CINDER_WAKE_URL: ${{ secrets.CINDER_WAKE_URL }}
+          CINDER_WAKE_TOKEN: ${{ secrets.CINDER_WAKE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CINDER_WAKE_URL}" ] || [ -z "${CINDER_WAKE_TOKEN}" ]; then
+            echo "::error::Set the CINDER_WAKE_URL and CINDER_WAKE_TOKEN repository secrets"; exit 1
+          fi
+          curl --no-buffer --silent --show-error --fail-with-body --max-time 3540 \
+            -X POST "${CINDER_WAKE_URL%/}/hooks/wake" \
+            -H "Authorization: Bearer ${CINDER_WAKE_TOKEN}" | tee wake.log
+          last=$(tail -n 1 wake.log)
+          case "$last" in
+            *'"event": "idle"'*|*'"status": "succeeded"'*) echo "ok" ;;
+            *) echo "::error::Cinder run did not succeed: $last"; exit 1 ;;
+          esac
